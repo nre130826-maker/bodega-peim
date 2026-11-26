@@ -1,0 +1,2212 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f5bff">
+<title>Bodegas PEIM 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+[hidden]{display:none!important}
+/* Layout: escena 3D a pantalla completa; arriba pestañas de bodega y selector de vista; paneles flotantes a los lados (en móvil se apilan debajo). */
+:root{
+  color-scheme: light; --hdr:56px;
+  --bg:#eef2f8; --surface:#ffffff; --ink:#0f1b33; --muted:#5d6b85; --line:#dbe3ef;
+  --brand:#1f5bff; --ok:#14a06b; --warn:#e8a300; --crit:#e5383b;
+  --shadow:0 10px 30px rgba(17,40,90,.12), 0 1px 2px rgba(17,40,90,.08);
+  --f-display:"Archivo", system-ui, sans-serif; --f-body:"Archivo", system-ui, sans-serif; --f-data:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hidden;margin:0}
+*{box-sizing:border-box}
+button{font-family:inherit}
+.app{position:relative;height:100%;display:flex;flex-direction:column}
+header{min-height:var(--hdr);flex:none;display:flex;align-items:center;gap:12px;padding-block:8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--surface);border-bottom:1px solid var(--line);z-index:5;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:8px;font-family:var(--f-display);font-weight:800;font-size:17px;letter-spacing:-.01em;white-space:nowrap}
+.logo .ver{font:500 10px var(--f-data);color:var(--muted);letter-spacing:0;align-self:flex-end;margin-bottom:2px}
+.logo i{width:22px;height:22px;border-radius:6px;background:var(--brand);display:grid;place-items:center}
+.logo i::after{content:"";width:10px;height:10px;border:2px solid #fff;border-radius:2px;transform:rotate(45deg) skew(8deg,8deg)}
+.seg{display:flex;gap:3px;background:var(--bg);padding:3px;border-radius:11px}
+.seg button{border:0;background:none;color:var(--muted);font-weight:600;font-size:13px;padding:7px 12px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.seg button:hover{color:var(--ink)} .seg button:focus-visible{outline:2px solid var(--brand)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(17,40,90,.15)}
+.seg .bd{font-family:var(--f-data);font-size:10.5px;padding:1px 6px;border-radius:999px;background:var(--crit);color:#fff}
+.seg .bd.zero{background:var(--line);color:var(--muted)}
+.views .on{background:var(--ink)!important;color:#fff!important}
+.spacer{flex:1}
+.live{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;padding:5px 10px;border-radius:999px;background:#e6f6ef;color:var(--ok);white-space:nowrap}
+.live::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;animation:blink 1.4s infinite}
+.live.demo{background:#fff4d6;color:#9a6a00} .live.err{background:#fde7e7;color:var(--crit)}
+.sync{font-family:var(--f-data);font-size:11px;color:var(--muted);white-space:nowrap}
+@keyframes blink{50%{opacity:.25}}
+
+.stage{position:relative;flex:1;min-height:0}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block;outline:none;touch-action:none}
+.labels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:1;isolation:isolate}
+.tag{position:absolute;left:0;top:0;background:var(--surface);border-radius:7px;padding:3px 6px 4px;box-shadow:0 4px 12px rgba(17,40,90,.14);min-width:86px;font-size:9.5px;pointer-events:auto;cursor:pointer;outline:2px solid transparent}
+.tag::after{content:"";position:absolute;left:50%;bottom:-3px;width:7px;height:7px;background:inherit;transform:translateX(-50%) rotate(45deg);border-radius:2px}
+.tag b{display:block;font-weight:700;font-size:10px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.tag .row{display:flex;justify-content:space-between;gap:6px;color:var(--muted);font-family:var(--f-data);font-size:9px;margin-top:1px}
+.tag .bar{height:3px;margin-top:3px}
+.tag.crit b::before{width:11px!important;height:11px!important;font-size:8px!important;margin-right:3px!important}
+.bar{height:5px;border-radius:3px;background:var(--line);margin-top:5px;overflow:hidden}
+.bar>span{display:block;height:100%;border-radius:3px;background:var(--ok);transition:width .6s ease}
+.tag.low{outline-color:var(--warn)} .tag.low .bar>span{background:var(--warn)}
+.tag.crit{outline-color:var(--crit);background:#fff5f5} .tag.crit .bar>span{background:var(--crit)}
+.tag.crit b::before{content:"!";display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;background:var(--crit);color:#fff;font-size:10px;margin-right:5px;vertical-align:1px}
+.tag.sel{outline-color:var(--brand)!important}
+.delta{position:absolute;left:0;top:0;font:700 13px var(--f-data);padding:3px 8px;border-radius:999px;pointer-events:none;white-space:nowrap;animation:rise 1.8s ease-out forwards;z-index:2000}
+.delta.out{background:var(--crit);color:#fff} .delta.in{background:var(--ok);color:#fff}
+@keyframes rise{0%{opacity:0;margin-top:0}12%{opacity:1}100%{opacity:0;margin-top:-60px}}
+
+.panel{background:var(--surface);border-radius:14px;box-shadow:var(--shadow);padding:12px 14px}
+.panel h3{margin:0 0 8px;font-family:var(--f-display);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.kpis{position:absolute;left:max(16px,env(safe-area-inset-left,0px));top:14px;display:grid;grid-template-columns:repeat(4,auto);gap:10px;z-index:3}
+.kpi{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);padding:9px 13px;min-width:112px}
+.kpi small{display:block;font-size:11px;color:var(--muted)}
+.kpi strong{font-family:var(--f-display);font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpi strong span{font-size:13px;color:var(--muted);font-weight:600}
+.kpi em{font-style:normal;font-size:11px;font-weight:600;margin-left:6px;color:var(--crit)}
+.kpi.alert strong{color:var(--crit)}
+.tgl{position:absolute;right:350px;top:14px;z-index:3;display:flex;align-items:center;gap:4px;background:var(--surface);border-radius:10px;padding:4px 4px 4px 10px;box-shadow:var(--shadow);font:600 12px var(--f-body);color:var(--muted)}
+.tgl button{border:0;background:none;font:600 12px var(--f-body);color:var(--ink);border-radius:7px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:5px}
+.tgl button i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.tgl button:hover{background:var(--bg)} .tgl button:focus-visible{outline:2px solid var(--brand)}
+.tgl button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.tag.rev{outline-color:var(--brand)}
+.hint{position:absolute;right:350px;bottom:16px;font-size:11px;color:var(--muted);z-index:2;text-align:right}
+
+.side{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:calc(var(--hdr) + 14px);bottom:14px;width:318px;display:flex;flex-direction:column;gap:10px;z-index:3}
+.side .panel{min-height:0;display:flex;flex-direction:column}
+.side .inv{flex:1} .side .alerts{flex:none;max-height:42%;overflow:auto}
+.list{overflow:auto;min-height:0;display:flex;flex-direction:column;gap:2px;margin:0 -6px}
+.item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:7px 6px;border-radius:8px;cursor:pointer;border:0;background:none;text-align:left;font:inherit;color:inherit;width:100%}
+.item:hover,.item:focus-visible{background:var(--bg);outline:none}
+.item .n{font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .n small{font-family:var(--f-data);font-weight:500;color:var(--muted);margin-right:6px}
+.item .v{font-family:var(--f-data);font-size:11.5px;color:var(--muted);text-align:right;white-space:nowrap}
+.item .bar{grid-column:1/-1;margin-top:2px}
+.item.low .bar>span{background:var(--warn)} .item.crit .bar>span{background:var(--crit)}
+.empty{font-size:12.5px;color:var(--muted);padding:4px 0}
+.al{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;cursor:pointer;border:0;font:inherit;text-align:left;width:100%;margin-top:6px}
+.al.crit{background:#fde9e9;color:#8f1517} .al.low{background:#fff5da;color:#7a5400}
+.al .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px;flex:none}
+.al.crit .ic{background:var(--crit)} .al.low .ic{background:var(--warn)}
+.al .t{font-size:12.5px;font-weight:700;line-height:1.25} .al .s{font-size:11px;font-family:var(--f-data);opacity:.85}
+.count{font-family:var(--f-data);font-size:11px;padding:2px 7px;border-radius:999px;background:var(--crit);color:#fff;letter-spacing:0}
+.count.zero{background:var(--line);color:var(--muted)}
+.search{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:500 13px var(--f-body);color:var(--ink);background:var(--bg);margin-bottom:6px}
+.search:focus{outline:2px solid var(--brand);border-color:transparent}
+
+.log{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:14px;width:min(520px,calc(100% - 370px));z-index:3}
+.log table{width:100%;border-collapse:collapse;font-size:12px}
+.log td{padding:4px 6px 4px 0;border-top:1px solid var(--line);white-space:nowrap}
+.log td.m{white-space:normal;width:100%} .log td.q,.log td.h{font-family:var(--f-data);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.log td.q{text-align:right;color:var(--ink)}
+.chip{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px}
+.chip.out{background:#fde9e9;color:var(--crit)} .chip.in{background:#e3f5ec;color:var(--ok)}
+.log tr.new td{animation:newrow 1.2s ease} @keyframes newrow{from{background:#eaf0ff}}
+
+/* recorrido */
+.mini{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:14px;z-index:3;background:var(--surface);border-radius:14px;box-shadow:var(--shadow);padding:8px}
+.mini canvas{display:block;width:190px;height:240px;cursor:crosshair;border-radius:8px}
+.mini small{display:block;font-size:10.5px;color:var(--muted);margin-top:4px;text-align:center}
+.pad{position:absolute;right:350px;bottom:44px;z-index:3;display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,48px);gap:6px}
+.pad button{border:0;border-radius:12px;background:rgba(255,255,255,.92);box-shadow:var(--shadow);font-size:18px;color:var(--ink);cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
+.pad button:active,.pad button.on{background:var(--ink);color:#fff}
+.pad .up{grid-column:2} .pad .lt{grid-column:1;grid-row:2} .pad .dn{grid-column:2;grid-row:2} .pad .rt{grid-column:3;grid-row:2}
+.cross{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;z-index:2;pointer-events:none}
+.cross::before,.cross::after{content:"";position:absolute;background:rgba(15,27,51,.55)}
+.cross::before{left:6px;top:0;width:2px;height:14px} .cross::after{top:6px;left:0;height:2px;width:14px}
+.whelp{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:3;background:rgba(15,27,51,.82);color:#fff;font-size:12px;padding:7px 12px;border-radius:999px;white-space:nowrap}
+
+/* detalle */
+.detail{position:absolute;left:max(16px,env(safe-area-inset-left,0px));top:calc(var(--hdr) + 82px);bottom:14px;width:344px;z-index:4;overflow:auto;background:var(--surface);border-radius:14px;box-shadow:var(--shadow);padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px}
+.detail>*{flex:none}
+.detail .dh{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.detail small{font-family:var(--f-data);font-size:11px;color:var(--muted)}
+.detail h2{margin:2px 0 0;font-family:var(--f-display);font-size:19px;font-weight:800;letter-spacing:-.01em;line-height:1.15;text-wrap:balance}
+.detail h4{margin:4px 0 -2px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.xbtn{border:0;background:var(--bg);color:var(--ink);width:32px;height:32px;border-radius:8px;font-size:18px;line-height:1;cursor:pointer;flex:none}
+.xbtn:hover{background:var(--line)} .xbtn:focus-visible{outline:2px solid var(--brand)}
+.dact{display:flex;gap:6px;flex-wrap:wrap}
+.dact button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;font:600 12px var(--f-body);color:var(--ink);cursor:pointer}
+.dact button:hover{background:var(--bg)}
+.order{border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+.order b{font-family:var(--f-display);font-size:16px}
+.order.crit{background:#fde9e9;color:#8f1517} .order.low{background:#fff4d6;color:#7a5400}
+.order .warn{font-weight:700}
+.note{margin:0;font-size:11.5px;line-height:1.45;color:var(--muted);background:var(--bg);border-radius:8px;padding:8px 10px}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px}
+.pill.ok{background:#e3f5ec;color:var(--ok)} .pill.low{background:#fff4d6;color:#8a5f00} .pill.crit{background:#fde9e9;color:var(--crit)}
+.big{display:flex;align-items:baseline;gap:6px}
+.big strong{font-family:var(--f-display);font-size:34px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.big span{color:var(--muted);font-size:14px}
+.gauge{position:relative;height:10px;border-radius:5px;background:var(--line)}
+.gauge>span{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--ok);transition:width .5s}
+.gauge.low>span{background:var(--warn)} .gauge.crit>span{background:var(--crit)}
+.gauge>i{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.gl{position:relative;height:14px;font-family:var(--f-data);font-size:10.5px;color:var(--muted)}
+.gl span{position:absolute;transform:translateX(-50%);white-space:nowrap} .gl span:first-child{transform:none} .gl span:last-child{transform:translateX(-100%)}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
+.kv div{background:var(--bg);border-radius:9px;padding:7px 9px;min-width:0}
+.kv dt{font-size:10.5px;color:var(--muted)} .kv dd{margin:1px 0 0;font-family:var(--f-data);font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.slots{display:flex;flex-direction:column;gap:4px;padding:8px;border-radius:10px;background:#eef3ff;border:2px solid #c9d8ff}
+.slots .lv{display:grid;grid-template-columns:42px repeat(6,1fr);gap:4px;align-items:center}
+.slots .lv b{font-size:10px;font-weight:600;color:var(--muted)}
+.slots .lv i{height:18px;border-radius:3px;background:#fff;border:1px dashed #b9c7e6}
+.slots .lv i.f{background:#f0a34a;border:1px solid #c97f2c}
+.detail svg{width:100%;height:64px;display:block}
+.dmov{width:100%;border-collapse:collapse;font-size:12px}
+.dmov td{padding:5px 4px 5px 0;border-top:1px solid var(--line);white-space:nowrap}
+.dmov td.q{text-align:right;font-family:var(--f-data)} .dmov td.h{font-family:var(--f-data);font-size:11px;color:var(--muted)}
+.dmov td.u{color:var(--muted);white-space:normal;width:100%}
+
+.walk .log,.walk .tgl,.walk .kpis{display:none}
+.macro .mini,.macro .pad,.macro .cross,.macro .whelp{display:none}
+.atag{position:absolute;left:0;top:0;display:flex;align-items:center;gap:4px;background:var(--ink);color:#fff;border:0;font:700 9.5px var(--f-body);padding:2px 7px 2px 5px;border-radius:999px;cursor:pointer;pointer-events:auto;white-space:nowrap;box-shadow:0 2px 8px rgba(15,27,51,.3)}
+.atag i{width:7px;height:7px;border-radius:50%;border:1.5px solid #fff}
+.atag small{font-weight:500;opacity:.7;font-size:8.5px}
+.atag .bang{width:12px;height:12px;border-radius:50%;background:var(--crit);display:grid;place-items:center;font-size:8.5px;animation:blink 1s infinite}
+.atag:focus-visible{outline:2px solid var(--brand)}
+.ptag.pbig{font-size:9px;padding:3px 8px;border-radius:7px} .ptag.pbig b{font-size:10px} .ptag.pbig span{font-size:9px} .ptag.pbig small{display:none}
+.ptag{position:absolute;left:0;top:0;border:0;background:var(--surface);color:var(--ink);font:600 10px var(--f-body);padding:3px 8px;border-radius:7px;box-shadow:0 4px 12px rgba(17,40,90,.18);cursor:pointer;pointer-events:auto;white-space:nowrap;outline:2px solid transparent}
+.ptag b{font-size:10.5px} .ptag span{color:var(--muted);margin-left:4px}
+.ptag.falta{outline-color:var(--crit)} .ptag.falta span:first-of-type{color:var(--crit);font-weight:700}
+.ptag.camino{outline-color:var(--brand)} .ptag.camino span{color:var(--brand);font-weight:700}
+.ptag.ok span{color:var(--ok)}
+.lnk{border:0;background:none;color:var(--brand);font:600 11px var(--f-body);letter-spacing:0;text-transform:none;cursor:pointer;padding:0}
+.lnk:hover{text-decoration:underline} .lnk:focus-visible{outline:2px solid var(--brand)}
+.movs{width:min(980px,calc(100% - 32px));max-height:calc(100% - 60px)}
+.mvf{display:flex;flex-wrap:wrap;gap:8px;padding:10px 16px 0}
+.mvf input,.mvf select{font:inherit;font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 9px}
+.mvf input{flex:1 1 220px;min-width:0}
+.mvsum{display:flex;flex-wrap:wrap;gap:6px 14px;padding:8px 16px 0;font-size:12px;color:var(--muted)} .mvsum b{color:var(--ink)}
+.movs td.h,.movs td.q{font-family:var(--f-data);font-size:11.5px;white-space:nowrap} .movs td.q{text-align:right}
+.movs td small{color:var(--muted)}
+.rail{position:absolute;right:352px;top:64px;z-index:5;display:flex;flex-direction:column;gap:8px;padding:6px;background:color-mix(in srgb,var(--surface) 80%,transparent);border-radius:999px;box-shadow:var(--shadow);backdrop-filter:blur(6px)}
+.rb{position:relative;width:40px;height:40px;border-radius:50%;border:2px solid var(--surface);background:var(--c);color:#fff;font:800 15px var(--f-display);cursor:pointer;display:grid;place-items:center;padding:0;transition:transform .15s}
+.rb:hover{transform:scale(1.08)} .rb:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.rb.on{box-shadow:0 0 0 3px var(--brand)}
+.rb .dot{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 3px;border-radius:8px;background:var(--crit);color:#fff;font:700 10px var(--f-body);display:grid;place-items:center;border:2px solid var(--surface)}
+.rb .rtip{position:absolute;right:calc(100% + 8px);top:50%;transform:translateY(-50%);background:var(--ink);color:#fff;font:600 11px var(--f-body);padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s}
+.rb:hover .rtip,.rb:focus-visible .rtip{opacity:1}
+.rtoast{position:absolute;right:410px;z-index:6;width:min(280px,calc(100% - 90px));background:var(--surface);border-radius:12px 12px 4px 12px;box-shadow:var(--shadow);padding:9px 12px;font-size:12.5px;line-height:1.4;cursor:pointer;border:0;text-align:left;color:var(--ink);font-family:var(--f-body);animation:rtin .25s ease}
+.rtoast b{display:block;font-size:12px;margin-bottom:2px}
+.rtoast .x{position:absolute;top:4px;right:6px;color:var(--muted);font-size:14px}
+@keyframes rtin{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+.talk{position:absolute;left:50%;bottom:130px;transform:translateX(-50%);z-index:4;border:0;background:var(--ink);color:#fff;font:700 13px var(--f-body);padding:10px 16px;border-radius:999px;box-shadow:var(--shadow);cursor:pointer}
+.chat{position:absolute;left:calc(max(16px, env(safe-area-inset-left, 0px)) + 360px);bottom:14px;width:410px;max-height:calc(100% - var(--hdr) - 100px);z-index:6;display:flex;flex-direction:column;background:var(--surface);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.chh{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.chh>div{flex:1;min-width:0} .chh b{display:block;font-family:var(--f-display);font-size:15px} .chh small{font-size:11.5px;color:var(--muted)}
+.av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px;flex:none;border:2px solid var(--line)}
+.msgs{flex:1;min-height:120px;overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.bub{max-width:90%;padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.45}
+.bub.a{background:var(--bg);align-self:flex-start;border-bottom-left-radius:4px}
+.bub.u{background:var(--ink);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.bub ul{margin:6px 0 0;padding-left:18px} .bub li{margin:3px 0}
+.ent{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,calc(100% - 32px));max-height:calc(100% - 100px);z-index:60;display:flex;flex-direction:column;background:var(--surface);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.ent .chh{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)} .ent .chh>div{flex:1;display:grid} .ent .chh small{color:var(--muted)}
+.entb{overflow:auto;padding:12px 16px;display:grid;gap:12px;font-size:13px}
+.entb table{width:100%;border-collapse:collapse;min-width:520px} .entb th{text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:6px;border-bottom:2px solid var(--line)}
+.entb td{padding:6px;border-bottom:1px solid var(--line);vertical-align:middle} .entb td small{color:var(--muted)}
+.entb input{width:84px;font:inherit;font-family:var(--f-data);padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+.entb input.dif{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,var(--surface))}
+.entb .tw{overflow-x:auto} .entb .box{background:var(--bg);border-radius:10px;padding:10px 12px}
+.entf{display:flex;justify-content:flex-end;gap:8px;padding:10px 16px;border-top:1px solid var(--line)} .entf .pact{margin:0}
+.pact{display:block;margin-top:8px;border:1px solid var(--brand);background:#fff;color:var(--brand);font:inherit;font-weight:700;font-size:12px;padding:6px 10px;border-radius:8px;cursor:pointer;text-align:left}
+.pact:hover{background:var(--brand);color:#fff} .pact.warn{border-color:var(--crit);color:#fff;background:var(--crit)} .pact:disabled{opacity:.5;cursor:default}
+.plink{border:0;background:none;padding:0;font:inherit;font-weight:700;color:var(--brand);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-top:1px solid var(--line)}
+.chips button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 11px;font:600 12px var(--f-body);color:var(--ink);cursor:pointer}
+.chips button.chip-ayuda{border-color:var(--brand);color:var(--brand)}
+.ayu h4{margin:0 0 4px;font-size:13px} .ayu p{margin:0 0 6px} .ayu .t{display:grid;gap:5px;margin:6px 0}
+.ayu .t button{all:unset;cursor:pointer;display:block;padding:6px 9px;border-radius:8px;background:var(--surface);border:1px solid var(--line);font-size:12.5px}
+.ayu .t button:hover{border-color:var(--brand)} .ayu .t button:focus-visible{outline:2px solid var(--brand)}
+.ayu .t button b{color:var(--brand)} .ayu .t button small{display:block;color:var(--muted);margin-top:1px}
+.ayu .tip{font-size:12px;color:var(--muted);border-top:1px dashed var(--line);padding-top:6px;margin-top:4px}
+.chips button:hover{background:var(--bg)} .chips button:focus-visible{outline:2px solid var(--brand)}
+.dots{display:inline-flex;gap:4px} .dots i{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1s infinite} .dots i:nth-child(2){animation-delay:.2s} .dots i:nth-child(3){animation-delay:.4s}
+@media (max-width:1200px){.chat{left:max(16px, env(safe-area-inset-left, 0px))}}
+@media (max-width:1200px){.kpis{grid-template-columns:repeat(2,auto)} .hint,.sync{display:none} .tgl{top:auto;bottom:14px}}
+@media (max-width:820px){
+  body{overflow:auto} .app{height:auto;min-height:100%}
+  /* encabezado compacto: logo + estado en una fila; vistas y bodegas en filas deslizables */
+  header{gap:6px 8px;padding-block:6px}
+  .logo{font-size:15px;gap:6px} .logo i{width:18px;height:18px;border-radius:5px} .logo i::after{width:8px;height:8px}
+  .spacer{display:none}
+  .live{order:1;margin-left:auto;font-size:10.5px;padding:3px 8px;gap:5px}
+  .views{order:2;width:100%;overflow-x:auto;scrollbar-width:none} .views button{flex:1;justify-content:center}
+  .tabs{order:3;width:100%;overflow-x:auto;scrollbar-width:none} .tabs button{flex:none}
+  .views::-webkit-scrollbar,.tabs::-webkit-scrollbar{display:none}
+  .seg{padding:2px;border-radius:9px} .seg button{font-size:12px;padding:5px 9px;border-radius:7px} .seg .bd{font-size:9.5px;padding:0 5px}
+  .stage{flex:none;height:72svh;min-height:360px}
+  .kpis{grid-template-columns:repeat(2,1fr);left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));top:10px;gap:6px}
+  .kpi{min-width:0;padding:6px 10px} .kpi strong{font-size:17px}
+  .tag{min-width:0;padding:2px 4px;border-radius:5px} .tag .row,.tag .bar{display:none} .tag b{font-size:8.5px;max-width:76px}
+  .atag{font-size:8.5px;padding:1px 6px 1px 4px} .ptag{font-size:9px;padding:2px 6px} .ptag b{font-size:9.5px}
+  .tgl{right:max(10px,env(safe-area-inset-right,0px));bottom:10px;padding:7px 10px;font-size:11px}
+  .side,.log{position:static;width:auto;margin:10px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
+  .side .alerts{max-height:none} .side .list{max-height:420px}
+  .log{margin-bottom:16px} .walk .log{display:block}
+  .detail{position:fixed;left:0;right:0;top:auto;bottom:0;width:auto;max-height:74vh;border-radius:16px 16px 0 0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-bottom:max(16px,env(safe-area-inset-bottom,0px));z-index:50;box-shadow:0 -10px 40px rgba(17,40,90,.25)}
+  .kpis{display:none} .walk .kpis{display:none}
+  .mini{left:10px;bottom:10px;padding:5px} .mini canvas{width:110px;height:140px} .mini small{display:none}
+  .pad{right:10px;bottom:10px;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px)}
+  .whelp{display:none}
+  .chat{position:fixed;left:0;right:0;bottom:0;width:auto;max-height:62vh;border-radius:16px 16px 0 0;z-index:49;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .bub{font-size:12.5px;padding:8px 10px} #chChips button{font-size:12px;padding:6px 10px}
+  .ent{left:0;right:0;top:auto;bottom:0;transform:none;width:auto;max-height:88vh;border-radius:16px 16px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .entb{padding:10px 12px;font-size:12.5px} .entb input{width:70px}
+  .movs .entb table{min-width:0} .movs th:nth-child(5),.movs td:nth-child(5),.movs th:nth-child(6),.movs td:nth-child(6){display:none}
+  .movs td.h{font-size:10.5px;white-space:normal;width:64px} .movs td,.movs th{padding:5px 4px}
+  .mvf{padding:8px 12px 0;gap:6px} .mvf select{flex:1 1 40%;font-size:12px} .mvsum{padding:6px 12px 0}
+  .talk{bottom:120px}
+  .atag small{display:none}
+  .rail{right:max(6px,env(safe-area-inset-right,0px));top:50%;transform:translateY(-50%);gap:6px;padding:4px}
+  .rb{width:34px;height:34px;font-size:13px} .rb .dot{min-width:14px;height:14px;font-size:9px}
+  .rb .rtip{display:none}
+  .rtoast{right:calc(max(6px,env(safe-area-inset-right,0px)) + 50px);width:min(240px,calc(100% - 80px));font-size:12px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="app macro" id="app">
+  <header>
+    <div class="logo"><i></i>Bodegas PEIM <small class="ver">v38</small></div>
+    <div class="seg tabs" id="tabs" role="tablist" aria-label="Bodegas"></div>
+    <div class="spacer"></div>
+    <div class="seg views" role="group" aria-label="Vista">
+      <button data-view="macro" class="on">Vista general</button>
+      <button data-view="walk">Recorrido</button>
+      <button data-view="prov">Proveedores</button>
+    </div>
+    <span class="sync" id="sync">—</span>
+    <span class="live demo" id="live">Demo</span>
+  </header>
+  <div class="stage" id="stage">
+    <canvas id="c" tabindex="0" aria-label="Vista 3D de la bodega"></canvas>
+    <div class="labels alerts-only" id="labels"></div>
+    <div class="cross"></div>
+    <div class="whelp">W A S D o flechas para moverte · arrastra para mirar · clic en un rack para ver su detalle</div>
+    <div class="kpis">
+      <div class="kpi"><small>Productos</small><strong id="kMat">0<span> / 100</span></strong></div>
+      <div class="kpi alert"><small>En alerta</small><strong id="kAl">0</strong><em id="kAlD"></em></div>
+      <div class="kpi"><small>Ocupación media</small><strong id="kOcc">0%</strong></div>
+      <div class="kpi"><small>Movimientos</small><strong id="kMov">0</strong></div>
+    </div>
+    <div class="tgl" role="group" aria-label="Etiquetas"><span>Etiquetas</span>
+      <button type="button" id="tgCrit" aria-pressed="false"><i style="background:var(--crit)"></i>Críticos</button>
+      <button type="button" id="tgLow" aria-pressed="false"><i style="background:var(--warn)"></i>Bajos</button>
+      <button type="button" id="tgLabels" aria-pressed="false">Todas</button>
+    </div>
+    <nav class="rail" id="rail" aria-label="Agentes de la bodega"></nav>
+    <div id="rtoast" hidden></div>
+    <div class="mini"><canvas id="mini" width="380" height="480" aria-label="Mapa de la bodega"></canvas><small>Clic en el mapa para ir ahí</small></div>
+    <div class="pad" aria-label="Controles de movimiento">
+      <button class="up" data-k="f" aria-label="Avanzar">▲</button>
+      <button class="lt" data-k="l" aria-label="Girar a la izquierda">⟲</button>
+      <button class="dn" data-k="b" aria-label="Retroceder">▼</button>
+      <button class="rt" data-k="r" aria-label="Girar a la derecha">⟳</button>
+    </div>
+    <button class="talk" id="talkBtn" type="button" hidden></button>
+    <span class="hint" id="hint">Arrastra para rotar · rueda para zoom · clic en un rack para ver su detalle</span>
+  </div>
+  <aside class="side">
+    <section class="panel alerts">
+      <h3>Alertas <span class="count zero" id="alCount">0</span></h3>
+      <div id="alList"></div>
+    </section>
+    <section class="panel inv">
+      <h3>Inventario <span style="text-transform:none;letter-spacing:0;font-weight:500">stock / máx.</span></h3>
+      <input class="search" id="q" type="search" placeholder="Buscar producto o rack…" aria-label="Buscar producto o rack">
+      <div class="list" id="invList"></div>
+    </section>
+  </aside>
+  <section class="panel log">
+    <h3>Movimientos en tiempo real <button type="button" class="lnk" id="verMovs">Ver todos</button></h3>
+    <table><tbody id="logBody"></tbody></table>
+  </section>
+  <aside class="ent movs" id="movs" hidden aria-label="Todos los movimientos">
+    <div class="chh"><div><b>Movimientos</b><small id="mvSub"></small></div><button class="xbtn" id="mvClose" type="button" aria-label="Cerrar movimientos">×</button></div>
+    <div class="mvf">
+      <input type="search" id="mvQ" placeholder="Buscar producto, usuario o documento…" aria-label="Buscar en movimientos">
+      <select id="mvTipo" aria-label="Tipo de movimiento"><option value="">Entradas y salidas</option><option value="in">Solo entradas</option><option value="out">Solo salidas</option></select>
+      <select id="mvDias" aria-label="Periodo"><option value="1">Hoy</option><option value="7" selected>Últimos 7 días</option><option value="30">Últimos 30 días</option><option value="0">Todo</option></select>
+      <select id="mvBod" aria-label="Bodega"><option value="esta">Esta bodega</option><option value="todas">Todas las bodegas</option></select>
+    </div>
+    <div class="mvsum" id="mvSum"></div>
+    <div class="entb"><div class="tw"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cantidad</th><th>Usuario</th><th>Documento</th></tr></thead><tbody id="mvBody"></tbody></table></div><p id="mvMas" class="hint" hidden></p></div>
+  </aside>
+  <aside class="chat" id="chat" hidden aria-label="Conversación con el agente">
+    <div class="chh"><span class="av" id="chAv"></span><div><b id="chName"></b><small id="chRole"></small></div><button class="xbtn" id="chClose" type="button" aria-label="Cerrar conversación">×</button></div>
+    <div class="msgs" id="chMsgs" aria-live="polite"></div>
+    <div class="chips" id="chChips"></div>
+  </aside>
+  <aside class="ent" id="ent" hidden aria-label="Lista de entrega a producción">
+    <div class="chh"><div><b>Lista de entrega a producción</b><small id="entSub"></small></div><button class="xbtn" id="entClose" type="button" aria-label="Cerrar lista de entrega">×</button></div>
+    <div class="entb" id="entBody"></div>
+    <div class="entf"><button type="button" class="pact" id="entOk">Confirmar entrega</button></div>
+  </aside>
+  <aside class="detail" id="detail" hidden aria-label="Detalle del rack">
+    <div class="dh"><div><small id="dCode"></small><h2 id="dName"></h2></div><button class="xbtn" id="dClose" type="button" aria-label="Cerrar detalle">×</button></div>
+    <div><span class="pill" id="dPill"></span></div>
+    <div class="dact"><button type="button" id="dGo">Ir al rack en recorrido</button></div>
+    <div class="big"><strong id="dStock"></strong><span id="dUnit"></span></div>
+    <div><div class="gauge" id="dGauge"><span id="dFill"></span><i id="dMin"></i></div><div class="gl"><span>0</span><span id="dMinL"></span><span id="dMaxL"></span></div></div>
+    <div class="order" id="dOrder" hidden></div>
+    <dl class="kv" id="dKv"></dl>
+    <p class="note" id="dNote" hidden></p>
+    <h4>Contenido del rack</h4><div class="slots" id="dSlots"></div>
+    <h4>Evolución del stock</h4><svg id="dSpark" viewBox="0 0 300 64" preserveAspectRatio="none" aria-label="Evolución del stock"></svg>
+    <h4>Movimientos de este producto</h4><table class="dmov"><tbody id="dMovs"></tbody></table>
+    <h4 id="dExtraH">Información adicional</h4><dl class="kv" id="dExtra"></dl>
+  </aside>
+</div>
+
+<script>
+/* ============================================================================
+   PUENTE GitHub → Apps Script.
+   Fuera de Apps Script no existe google.script.run; aquí se crea uno igual que
+   manda cada llamada por internet a la "puerta" (Api.gs) del Apps Script.
+   PEIM_API = el link /exec de tu implementación de Apps Script.
+   ============================================================================ */
+window.PEIM_API = 'https://script.google.com/macros/s/AKfycbxiEdsJHdSGp0ZHLyu5Sm4HsF-vGAYUVeNvvSLNeI838iwX4mAt1nACHDArAB8T_kfLVQ/exec';
+(function(){
+  async function llamar(fn, args){
+    const r = await fetch(window.PEIM_API, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify({ fn, args }) });
+    if (!r.ok) throw new Error('El servidor respondió ' + r.status);
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    return j.data;
+  }
+  function runner(ok, fail){
+    return new Proxy({}, { get(_, p){
+      if (p === 'withSuccessHandler') return h => runner(h, fail);
+      if (p === 'withFailureHandler') return h => runner(ok, h);
+      return (...args) => { llamar(p, args).then(d => ok && ok(d)).catch(e => fail && fail(e)); };
+    } });
+  }
+  window.google = { script: { run: runner(null, null) } };
+})()
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+/* =====================================================================
+   CONFIGURACIÓN
+   Apps Script (google.script.run.getData) → si no, modo DEMO.
+   ===================================================================== */
+const CONFIG = { pollMs: 8000, factorBajo: 1.5, bodegasDefault: ['Salas', 'Colchonera', 'Espumas', 'Basecamas y cabeceros'], operarios: 10 };
+
+/* ---------- utilidades ---------- */
+const norm = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const num = v => { if (typeof v === 'number') return v; const n = parseFloat(String(v ?? '').replace(/\s/g,'').replace(',', '.')); return isNaN(n) ? 0 : n; };
+const pick = (o, keys) => { for (const k of keys) if (o[k] !== undefined && o[k] !== '') return o[k]; };
+const fmt = n => (Math.round(n * 10) / 10).toLocaleString('es-CO');
+const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const $ = id => document.getElementById(id);
+function lowerKeys(r){ const o = {}; for (const k in r) o[norm(k)] = r[k]; return o; }
+function toMaterial(r){
+  const o = lowerKeys(r);
+  const nombre = String(pick(o,['material','nombre','nombreproducto','descripcion']) || 'Sin nombre');
+  const m = {
+    id: String(pick(o,['id','idproducto','idmaterial','codigo','sku']) ?? nombre), nombre,
+    zona: String(pick(o,['zona','ubicacion','rack']) || '').trim().toUpperCase(),
+    bodega: String(pick(o,['bodega','nombrebodega']) || '').trim(),
+    unidad: String(pick(o,['unidad','unidadproducto','um']) || 'u'),
+    stock: num(pick(o,['stock','stockactual','cantidad','existencia'])),
+    min: num(pick(o,['stockmin','minimo','min'])), max: num(pick(o,['stockmax','maximo','max','capacidad'])),
+    consumo: num(pick(o,['consumodiario','consumo'])), lead: num(pick(o,['diasentrega','tiempoentrega','leadtime'])),
+    fuente: String(pick(o,['consumofuente']) || (num(pick(o,['consumodiario','consumo'])) > 0 ? 'real' : '')),
+    diasHist: num(pick(o,['diashistorial'])), nSal: num(pick(o,['salidasperiodo'])),
+    raw: r
+  };
+  if (!m.max) m.max = Math.max(m.stock, m.min * 3, 1);
+  return m;
+}
+function toMov(r){
+  const o = lowerKeys(r);
+  return { fecha: pick(o,['fecha','fechahora']) || '', material: String(pick(o,['idmaterial','material','idproducto','id']) || ''),
+    tipo: String(pick(o,['tipo','movimiento']) || ''), cantidad: num(pick(o,['cantidad'])), usuario: String(pick(o,['usuario','responsable']) || ''), doc: String(pick(o,['documento']) || '') };
+}
+// "Base camas y cabeceros" = "Basecamas y cabeceros" = "Base camas y cabecero"
+const claveBodega = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).map(w => w.replace(/s$/, '')).join('');
+const status = m => m.stock <= m.min ? 'crit' : (m.stock <= m.min * CONFIG.factorBajo ? 'low' : 'ok');
+const KNOWN = new Set('id idproducto idmaterial codigo sku material nombre nombreproducto descripcion zona ubicacion rack bodega nombrebodega unidad unidadproducto um stock stockactual cantidad existencia stockmin minimo min stockmax maximo max capacidad consumodiario consumo diasentrega tiempoentrega leadtime consumofuente diashistorial salidasperiodo consumoestimado'.split(' '));
+// de dónde sale el consumo: real (historial suficiente), estimado (Config3D) o preliminar (poco historial)
+const FUENTE = { real:'real', estimado:'estimado', preliminar:'preliminar' };
+const aprox = m => m.fuente && m.fuente !== 'real' ? '≈ ' : '';
+// cobertura = stock ÷ consumo diario (salidas de los últimos 30 días)
+const cobertura = m => m.consumo > 0 ? m.stock / m.consumo : null;
+const fmtDias = d => d === null ? 'Sin consumo reciente' : d < 1 ? 'Menos de 1 día' : Math.floor(d) + (Math.floor(d) === 1 ? ' día' : ' días');
+// pedido sugerido (solo en ámbar o rojo) = llenar hasta el máximo + lo que se consume mientras llega el pedido
+const objetivo = m => m.max > m.min ? m.max : Math.max(m.min * 2, 1);     // si StockMax ≤ mínimo, se apunta a 2 × mínimo
+const pedido = m => status(m) === 'ok' ? 0 : Math.max(0, Math.ceil(objetivo(m) - m.stock + m.consumo * (m.lead || 0)));
+
+/* =====================================================================
+   DISTRIBUCIÓN: 10 pasillos (A–J) × 10 racks (01–10) = 100 racks por bodega
+   Cada rack: 3 niveles × 6 posiciones (3 de frente × 2 de fondo)
+   ===================================================================== */
+const ROWS = 12, COLS = 10, BW = 2.6, BD = 1.1, PITCH = 4.4, GAP = 3.2;
+const MAINROWS = 10;                                                   // A–J en todas las bodegas; los pasillos K y L (20 racks más) solo en Salas
+const LEVELS = 3, SC = 3, SR = 2, CAP = LEVELS * SC * SR;
+const LEVEL_Y = [.14, 1.14, 2.14], TOP = 3.15;
+const XMIN = -18.5, XMAX = 18.5, ZMIN = -23, ZMAX = 32.8, WH = 6;   // fondo hasta el pasillo L
+const XS = -(COLS * BW + GAP) / 2, Z0 = -20;
+const LET = 'ABCDEFGHIJKL';
+const bays = [];
+for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++){
+  bays.push({ i:bays.length, row:r, col:c, extra: r >= MAINROWS, code: LET[r] + '-' + String(c + 1).padStart(2, '0'),
+    x: XS + BW/2 + c * BW + (c >= COLS/2 ? GAP : 0), z: Z0 + r * PITCH, m:null, state:'empty' });
+}
+const bayByCode = Object.fromEntries(bays.map(b => [b.code, b]));
+
+/* ---------- escena ---------- */
+const canvas = $('c'), stage = $('stage'), app = $('app');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xeef2f8);
+const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, -300, 500);
+ortho.position.set(60, 66, 60);
+const persp = new THREE.PerspectiveCamera(70, 1, .05, 300); persp.rotation.order = 'YXZ';
+const controls = new THREE.OrbitControls(ortho, canvas);
+controls.target.set(0, 0, 0); controls.enableDamping = true; controls.dampingFactor = .08;
+controls.minPolarAngle = .2; controls.maxPolarAngle = 1.25; controls.minZoom = .6; controls.maxZoom = 6; controls.screenSpacePanning = true;
+if (window.matchMedia && matchMedia('(pointer: coarse)').matches) controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };   // celular: un dedo mueve, dos dedos acercan y giran
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb4c2db, .65));
+const sun = new THREE.DirectionalLight(0xffffff, .6);
+sun.position.set(20, 45, 25); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left:-34, right:34, top:34, bottom:-34, near:1, far:120 }); sun.shadow.bias = -.0006;
+scene.add(sun);
+
+const M = (c, o={}) => new THREE.MeshStandardMaterial(Object.assign({ color:c, roughness:.75, metalness:.05 }, o));
+function mesh(geo, mat, x=0, y=0, z=0, parent=scene){ const m = new THREE.Mesh(geo, mat); m.position.set(x,y,z); m.castShadow = m.receiveShadow = true; parent.add(m); return m; }
+const B = (w,h,d) => new THREE.BoxGeometry(w,h,d);
+
+// terreno y piso con pasillos y códigos pintados
+mesh(new THREE.PlaneGeometry(400, 400), M(0xe4eaf3), 0, -.01, 0).rotation.x = -Math.PI/2;
+(function floor(){
+  const W = XMAX - XMIN, D = ZMAX - ZMIN, S = 48, cv = document.createElement('canvas');
+  cv.width = Math.round(W * S); cv.height = Math.round(D * S); const g = cv.getContext('2d');
+  const X = x => (x - XMIN) * S, Z = z => (z - ZMIN) * S;
+  g.fillStyle = '#f7f9fc'; g.fillRect(0, 0, cv.width, cv.height);
+  g.strokeStyle = '#e6ebf3'; g.lineWidth = 2;
+  for (let x = 0; x < cv.width; x += S * 2) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, cv.height); g.stroke(); }
+  for (let z = 0; z < cv.height; z += S * 2) { g.beginPath(); g.moveTo(0, z); g.lineTo(cv.width, z); g.stroke(); }
+  g.fillStyle = '#f2c230';
+  for (let r = 0; r < MAINROWS; r++){ // líneas amarillas del pasillo frente a cada fila
+    const zf = Z0 + r * PITCH + BD/2 + .25, zb = Z0 + (r + 1) * PITCH - BD/2 - .25;
+    g.fillRect(X(XS - .6), Z(zf), (COLS * BW + GAP + 1.2) * S, 5);
+    if (r < MAINROWS - 1) g.fillRect(X(XS - .6), Z(zb) - 5, (COLS * BW + GAP + 1.2) * S, 5);
+  }
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (const b of bays.filter(x => !x.extra)){
+    g.fillStyle = '#1f5bff'; g.font = '800 26px Archivo, system-ui, sans-serif';
+    g.fillText(b.code, X(b.x), Z(b.z + BD/2 + .7));
+  }
+  for (let r = 0; r < MAINROWS; r++){
+    g.fillStyle = '#0f1b33'; g.font = '800 96px Archivo, system-ui, sans-serif';
+    g.fillText(LET[r], X(XS - 1.8), Z(Z0 + r * PITCH));
+    g.fillText(LET[r], X(XS + COLS * BW + GAP + 1.8), Z(Z0 + r * PITCH));
+  }
+  const t = new THREE.CanvasTexture(cv); t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const p = mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map:t, roughness:.9 }), (XMIN + XMAX)/2, .01, (ZMIN + ZMAX)/2);
+  p.rotation.x = -Math.PI/2; p.castShadow = false;
+})();
+// marcas del pasillo K (solo se ven en Salas)
+const pisoK = (function(){
+  const z0 = Z0 + (MAINROWS - 1) * PITCH + BD / 2 + .2, z1 = ZMAX, W = XMAX - XMIN, D = z1 - z0, S = 48, cv = document.createElement('canvas');
+  cv.width = Math.round(W * S); cv.height = Math.round(D * S); const g = cv.getContext('2d');
+  const X = x => (x - XMIN) * S, Z = z => (z - z0) * S, w = (COLS * BW + GAP + 1.2) * S;
+  g.fillStyle = '#f2c230';
+  for (let r = MAINROWS; r < ROWS; r++){
+    g.fillRect(X(XS - .6), Z(Z0 + r * PITCH - BD / 2 - .25) - 5, w, 5);
+    g.fillRect(X(XS - .6), Z(Z0 + r * PITCH + BD / 2 + .25), w, 5);
+  }
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#1f5bff'; g.font = '800 26px Archivo, system-ui, sans-serif';
+  for (const b of bays.filter(x => x.extra)) g.fillText(b.code, X(b.x), Z(b.z + BD / 2 + .7));
+  g.fillStyle = '#0f1b33'; g.font = '800 96px Archivo, system-ui, sans-serif';
+  for (let r = MAINROWS; r < ROWS; r++){ g.fillText(LET[r], X(XS - 1.8), Z(Z0 + r * PITCH)); g.fillText(LET[r], X(XS + COLS * BW + GAP + 1.8), Z(Z0 + r * PITCH)); }
+  const p = mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshBasicMaterial({ map:new THREE.CanvasTexture(cv), transparent:true, depthWrite:false }), (XMIN + XMAX) / 2, .015, (z0 + z1) / 2);
+  p.rotation.x = -Math.PI / 2; p.castShadow = p.receiveShadow = false; return p;
+})();
+// muros: en vista general se bajan los del frente; en recorrido se ven todos
+const wallM = M(0x2357e8), wallLow = M(0x1a44bf);
+const wallsFull = new THREE.Group(), wallsStub = new THREE.Group(); scene.add(wallsFull, wallsStub);
+function slab(x0,y0,z0,x1,y1,z1, m, parent=scene){ return mesh(B(x1-x0, y1-y0, z1-z0), m, (x0+x1)/2, (y0+y1)/2, (z0+z1)/2, parent); }
+const T = .3;
+slab(XMIN-T,0,ZMIN-T, XMAX+T,WH,ZMIN, wallM); slab(XMIN-T,0,ZMIN-T, XMIN,WH,ZMAX+T, wallM); // fondo e izquierda
+slab(XMIN-T,WH,ZMIN-T, XMAX+T,WH+.4,ZMIN, wallLow);
+// derecha con portón de muelle (z −3…3) y frente
+for (const [g, h] of [[wallsFull, WH], [wallsStub, .5]]){
+  slab(XMAX,0,ZMIN-T, XMAX+T,h,-3, wallM, g); slab(XMAX,0,3, XMAX+T,h,ZMAX+T, wallM, g);
+  if (h > 1) slab(XMAX,4.6,-3, XMAX+T,h,3, wallM, g);
+  slab(XMIN-T,0,ZMAX, XMAX+T,h,ZMAX+T, wallM, g);
+}
+wallsFull.visible = false;
+// patio, camión y árboles
+slab(XMAX+T, 0, -7, XMAX+12, .06, 7, M(0xd5dde9)).castShadow = false;
+(function(){ const tr = new THREE.Group(), white = M(0xffffff), blue = M(0x1f5bff), dark = M(0x24324d);
+  mesh(B(7, 2.6, 2.4), white, 0, 1.9, 0, tr); mesh(B(7.02, .35, 2.42), blue, 0, 1.0, 0, tr);
+  mesh(B(1.9, 2, 2.3), blue, 4.5, 1.55, 0, tr);
+  [-2.4, -1, 4.2].forEach(x => [-1.2, 1.2].forEach(z => { const w = mesh(new THREE.CylinderGeometry(.45,.45,.3,16), dark, x, .45, z, tr); w.rotation.x = Math.PI/2; }));
+  tr.position.set(XMAX + 6, 0, 0); scene.add(tr); })();
+
+/* ---------- montacargas: lleva la carga entre el camión y los racks ---------- */
+const fork = new THREE.Group();
+(function(){ const y = M(0xf5a524), d = M(0x24324d);
+  mesh(B(1.5, .7, 1.05), y, 0, .55, 0, fork); mesh(B(.8, .9, .95), y, -.3, 1.33, 0, fork);
+  mesh(B(.9, .06, 1), d, -.25, 2.1, 0, fork);
+  for (const z of [-.45, .45]) mesh(B(.06, .8, .06), d, -.62, 1.72, z, fork);
+  mesh(B(.12, 2.3, .75), d, .82, 1.15, 0, fork);
+  for (const z of [-.24, .24]) mesh(B(1, .06, .14), d, 1.35, .22, z, fork);
+  for (const x of [-.45, .45]) for (const z of [-.55, .55]){ const w = mesh(new THREE.CylinderGeometry(.24, .24, .2, 14), d, x, .24, z, fork); w.rotation.x = Math.PI/2; }
+})();
+const load = new THREE.Group();
+mesh(B(1, .12, .95), M(0xc7a072), 0, .06, 0, load);
+for (let i = 0; i < 8; i++) mesh(B(.46, .38, .44), M(0xf29a2e), ((i % 2) - .5) * .48, .12 + .19 + Math.floor(i / 4) * .4, (((i >> 1) % 2) - .5) * .46, load);
+load.position.set(1.35, .26, 0); load.visible = false; fork.add(load);
+const XP = XS + COLS * BW + GAP + 1.4, AZ0 = -.2;
+const FHOME = new THREE.Vector3(XMAX + 2.4, 0, AZ0);
+fork.position.copy(FHOME); fork.rotation.y = Math.PI; scene.add(fork);
+const jobs = []; let job = null;
+function showLoad(on, b){ load.visible = on; if (on && b && b.m){ const pal = palOf(kindOf(b.m)); load.children.slice(1).forEach((c, i) => c.material.color.setHex(pal[i % pal.length])); } }
+function queueTrip(b, delta, done){
+  if (jobs.length > 3){ done(); return; }        // si hay muchos movimientos seguidos, se aplican directo
+  const V = (x, z) => new THREE.Vector3(x, 0, z), az = b.z + PITCH/2;
+  const ida = [{ p:V(XP, AZ0) }, { p:V(XP, az) }], vuelta = [{ p:V(XP, az) }, { p:V(XP, AZ0) }];
+  jobs.push(delta > 0
+    ? [{ p:FHOME, act:() => showLoad(true, b) }, ...ida, { p:V(b.x, az), act:() => { showLoad(false); done(); } }, ...vuelta, { p:FHOME }]       // entrada: del camión al rack
+    : [{ p:FHOME }, ...ida, { p:V(b.x, az), act:() => { showLoad(true, b); done(); } }, ...vuelta, { p:FHOME, act:() => showLoad(false) }]);     // salida: del rack al camión
+}
+function stepFork(dt){
+  if (!job){ if (!jobs.length) return; job = jobs.shift(); }
+  const st = job[0], cur = fork.position, d = st.p.clone().sub(cur); d.y = 0;
+  const dist = d.length(), sp = 10 * dt;
+  if (dist > .01){ let da = Math.atan2(-d.z, d.x) - fork.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); fork.rotation.y += da * Math.min(1, dt * 10); }
+  if (dist <= sp){ cur.copy(st.p); job.shift(); st.act && st.act(); if (!job.length) job = null; }
+  else cur.add(d.multiplyScalar(sp / dist));
+}
+function resetFork(){ jobs.length = 0; job = null; fork.position.copy(FHOME); fork.rotation.y = Math.PI; showLoad(false); }
+
+/* =====================================================================
+   OPERARIOS (NPC): caminan por los pasillos y revisan racks con su tabla.
+   Prefieren los racks en alerta. Se usan los mismos 10 en cada bodega.
+   ===================================================================== */
+const NPC_N = CONFIG.operarios;
+const CROSS_X = [XS - 1.4, XS + (COLS / 2) * BW + GAP / 2, XP];        // pasillos transversales: izquierdo, central, derecho
+const aisleZ = r => Z0 + r * PITCH + PITCH / 2;                        // centro del pasillo frente a la fila r
+const npcs = []; var lauraLista = false;
+(function(){
+  const legGeo = B(.15, .8, .17), armGeo = B(.1, .6, .12), torsoGeo = B(.44, .62, .26), headGeo = new THREE.SphereGeometry(.13, 14, 10);
+  const helmGeo = new THREE.SphereGeometry(.155, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), brimGeo = new THREE.CylinderGeometry(.19, .19, .02, 16);
+  const clipGeo = B(.24, .32, .025), pants = M(0x253449), shirt = M(0x2f3e5c), board = M(0xc79a62);
+  const skins = [0xc68642, 0xe0ac69, 0x8d5524, 0xf1c27d, 0xa0663a], vests = [0xff7a1a, 0xb8e02a, 0xff7a1a, 0xf5c518], helms = [0xf5c518, 0xffffff, 0xf5c518, 0x1f5bff];
+  for (let i = 0; i < NPC_N; i++){
+    const g = new THREE.Group(), part = (geo, mat, x, y, z, parent) => mesh(geo, mat, x, y, z, parent);
+    const legs = [-1, 1].map(sx => { const l = new THREE.Group(); l.position.set(sx * .11, .86, 0); part(legGeo, pants, 0, -.42, 0, l); g.add(l); return l; });
+    part(torsoGeo, M(vests[i % vests.length]), 0, 1.2, 0, g);
+    part(B(.46, .06, .28), M(0xd9e021), 0, 1.08, 0, g);                 // franja reflectiva
+    const arms = [-1, 1].map(sx => { const a = new THREE.Group(); a.position.set(sx * .29, 1.47, 0); part(armGeo, shirt, 0, -.3, 0, a); g.add(a); return a; });
+    const head = new THREE.Group(); head.position.set(0, 1.66, 0); g.add(head);
+    part(headGeo, M(skins[i % skins.length]), 0, 0, 0, head);
+    const hm = M(helms[i % helms.length]); part(helmGeo, hm, 0, .03, 0, head); part(brimGeo, hm, 0, .03, .03, head);
+    const clip = part(clipGeo, board, 0, -.55, .1, arms[1]); clip.rotation.x = -.3; clip.visible = false;
+    scene.add(g);
+    npcs.push({ g, legs, arms, head, clip, path:[], state:'idle', t: Math.random() * 3, phase: Math.random() * 6, row: 0, lane: (i % 2 ? .45 : -.45), speed: 1.15 + Math.random() * .4, bay:null });
+  }
+})();
+function npcTarget(n){
+  const withProd = bays.filter(b => b.m && b !== n.bay), alert = withProd.filter(b => b.state === 'crit' || b.state === 'low');
+  const pool = alert.length && Math.random() < .45 ? alert : withProd.length ? withProd : bays;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+function npcPlan(n){
+  const b = npcTarget(n), p = n.g.position, V = (x, z) => new THREE.Vector3(x, 0, z);
+  const tx = b.x + (Math.random() - .5) * 1.2, tz = b.z + BD / 2 + .75;
+  const path = [];
+  if (b.row !== n.row){
+    const cx = CROSS_X.reduce((best, c) => Math.abs(p.x - c) + Math.abs(tx - c) < Math.abs(p.x - best) + Math.abs(tx - best) ? c : best, CROSS_X[0]);
+    path.push(V(p.x, aisleZ(n.row) + n.lane), V(cx + n.lane, aisleZ(n.row) + n.lane), V(cx + n.lane, aisleZ(b.row) + n.lane), V(tx, aisleZ(b.row) + n.lane));
+  }
+  path.push(V(tx, tz));
+  n.path = path; n.bay = b; n.row = b.row; n.state = 'walk'; n.clip.visible = false;
+}
+function resetNPCs(){
+  npcs.forEach((n, i) => {
+    const vb = bays.filter(bayVisible), b = vb[Math.floor(Math.random() * vb.length)];
+    n.row = b.row; n.g.position.set(b.x + (Math.random() - .5) * 2, 0, aisleZ(b.row) + n.lane);
+    n.g.rotation.y = Math.random() * 6; n.state = 'idle'; n.t = Math.random() * 2.5; n.path = []; n.clip.visible = false;
+  });
+  if (lauraLista) placeLaura();
+}
+function stepNPCs(dt, t){
+  for (const n of npcs){
+    if (n.talking){                                         // conversando: se queda quieto mirando hacia ti
+      const tp = mode === 'walk' ? new THREE.Vector3(player.x, 0, player.z) : ortho.position;
+      let da = Math.atan2(tp.x - n.g.position.x, tp.z - n.g.position.z) - n.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); n.g.rotation.y += da * Math.min(1, dt * 6);
+      n.legs[0].rotation.x = n.legs[1].rotation.x = 0; n.arms[0].rotation.x = 0; n.arms[1].rotation.x = Math.sin(t * 3) * .25 - .2; n.head.rotation.set(0, 0, 0);
+      continue;
+    }
+    if (n.state === 'idle'){ n.t -= dt; if (n.t <= 0){ if (n.patrol){ n.patrol.i = (n.patrol.i + 1) % n.patrol.pts.length; n.path = [n.patrol.pts[n.patrol.i].clone()]; n.state = 'walk'; n.clip.visible = false; } else npcPlan(n); } }
+    else if (n.state === 'walk'){
+      const to = n.path[0], d = to.clone().sub(n.g.position); d.y = 0; const dist = d.length(), sp = n.speed * dt;
+      if (dist > .01){ let da = Math.atan2(d.x, d.z) - n.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); n.g.rotation.y += da * Math.min(1, dt * 8); }
+      if (dist <= sp){ n.g.position.copy(to); n.path.shift(); if (!n.path.length){ n.state = 'check'; n.t = 3 + Math.random() * 4; n.clip.visible = true; } }
+      else n.g.position.add(d.multiplyScalar(sp / dist));
+      n.phase += dt * n.speed * 5.5; const k = Math.sin(n.phase);
+      n.legs[0].rotation.x = k * .55; n.legs[1].rotation.x = -k * .55; n.arms[0].rotation.x = -k * .45; n.arms[1].rotation.x = k * .45;
+      n.head.rotation.x = 0;
+    } else {                                                   // revisando: mira el rack y la tabla
+      let da = (n.patrol ? n.patrol.face[n.patrol.i] : Math.PI) - n.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); n.g.rotation.y += da * Math.min(1, dt * 6);
+      n.legs[0].rotation.x = n.legs[1].rotation.x = 0; n.arms[0].rotation.x = 0;
+      n.arms[1].rotation.x = -1.05;
+      n.head.rotation.x = Math.sin(t * 1.3 + n.phase) * .25 - .15; n.head.rotation.y = Math.sin(t * .7 + n.phase) * .35;
+      n.t -= dt; if (n.t <= 0){ n.head.rotation.y = 0; n.arms[1].rotation.x = 0; n.state = 'idle'; n.t = .3 + Math.random() * 1.2; }
+    }
+  }
+}
+resetNPCs();
+
+/* =====================================================================
+   AGENTES (nivel 1): 5 operarios con rol. Clic (o acercarse en recorrido)
+   para conversar. Responden con los mismos cálculos de la vista y del reporte.
+   ===================================================================== */
+const AGENTES = [
+  { id:'carlos', nombre:'Carlos', rol:'Jefe de bodega',        casco:0xffffff, css:'#5d6b85' },
+  { id:'laura',  nombre:'Laura',  rol:'Compras',               casco:0x1f5bff, css:'#1f5bff' },
+  { id:'andres', nombre:'Andrés', rol:'Vigía de movimientos',  casco:0xe5383b, css:'#e5383b' },
+  { id:'sofia',  nombre:'Sofía',  rol:'Auditora de datos',     casco:0x14a06b, css:'#14a06b' },
+  { id:'miguel', nombre:'Miguel', rol:'Conteo cíclico',        casco:0xf5a524, css:'#c77d00' },
+  { id:'pedro',  nombre:'Pedro',  rol:'Producción',            casco:0x7b3fe4, css:'#7b3fe4' }
+];
+/* Cada bodega tiene su propio equipo con los MISMOS nombres: cada uno muestra solo la información de la bodega
+   en la que estás. Si algún día quieres nombres distintos, cámbialos aquí y en EQUIPOS de Agentes.gs. */
+const MISMO_EQUIPO = { carlos:'Carlos', laura:'Laura', andres:'Andrés', sofia:'Sofía', miguel:'Miguel', pedro:'Pedro' };
+const EQUIPOS = { 'Salas':MISMO_EQUIPO, 'Colchonera':MISMO_EQUIPO, 'Espumas':MISMO_EQUIPO, 'Basecamas y cabeceros':MISMO_EQUIPO };
+function equipoDe(b){ const k = Object.keys(EQUIPOS).find(x => claveBodega(x) === claveBodega(b || '')); return EQUIPOS[k] || EQUIPOS.Salas; }
+function nombrarAgentes(){
+  const e = equipoDe(current);
+  AGENTES.forEach(a => { a.nombre = e[a.id] || a.nombre; if (a.tag) a.tag.querySelector('span').textContent = a.nombre; });
+}
+let BITACORA = [], CALIDAD = { movVacios:0, sinBodega:0, sinProveedor:0 }, chatAgent = null;
+const agentHits = [];
+AGENTES.forEach((a, i) => {
+  const n = npcs[i]; if (!n) return;
+  n.agent = a; a.npc = n;
+  n.head.children[1].material = n.head.children[2].material = M(a.casco);
+  const hit = new THREE.Mesh(new THREE.CylinderGeometry(.5, .5, 2, 8), new THREE.MeshBasicMaterial()); hit.position.y = 1; hit.visible = false; hit.userData.agent = a; n.g.add(hit); agentHits.push(hit);
+  const t = document.createElement('button'); t.type = 'button'; t.className = 'atag';
+  t.innerHTML = `<i style="background:${a.css}"></i><span>${a.nombre}</span><small>${a.rol}</small><b class="bang" hidden>!</b>`;
+  t.addEventListener('click', () => openChat(a)); $('labels').appendChild(t); a.tag = t;
+});
+try { nombrarAgentes(); } catch (e) {}
+
+/* ---------- análisis de la bodega actual (mismas fórmulas del panel y del reporte) ---------- */
+const enDias = d => fechaTxt(new Date(Date.now() + d * 864e5));
+function fechaTxt(d){ return d.toLocaleDateString('es-CO', { day:'numeric', month:'short' }); }
+function horaTxt(d){ return d.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit', hour12:false }); }
+function infoBodega(){
+  return bays.filter(b => b.m).map(b => {
+    const m = b.m, st = status(m), cb = cobertura(m), dMin = m.consumo > 0 ? (m.stock - m.min) / m.consumo : null;
+    const dPed = m.stock <= m.min ? 0 : dMin === null ? null : dMin - (m.lead || 0);
+    const pq = Math.max(0, Math.ceil(objetivo(m) - m.stock + m.consumo * (m.lead || 0)));
+    return { b, m, st, cb, dPed, pq };
+  });
+}
+function planCompras(){
+  const inf = infoBodega();
+  const hoy = inf.filter(x => x.st === 'crit' || (x.dPed !== null && x.dPed <= 0)).sort((a, b) => (a.cb ?? 1e9) - (b.cb ?? 1e9));
+  const semana = inf.filter(x => hoy.indexOf(x) < 0 && (x.st === 'low' || (x.dPed !== null && x.dPed <= 7))).sort((a, b) => (a.dPed ?? 1e9) - (b.dPed ?? 1e9));
+  return { inf, hoy, semana };
+}
+const prov = m => (m.raw && (m.raw.Proveedor || m.raw.proveedor)) || 'sin proveedor';
+const link = b => `<button class="plink" data-bay="${b.i}">${esc(b.m.nombre)}</button>`;
+const lista = items => '<ul>' + items.map(t => '<li>' + t + '</li>').join('') + '</ul>';
+function ultimoReporte(){   // el último reporte del jefe de ESTA bodega
+  return BITACORA.find(e => /reporte/i.test(e.Evento) && (claveBodega(String(e.Agente)).indexOf(claveBodega(current)) >= 0 || String(e.Detalle || '').indexOf(current) >= 0));
+}
+function problemasDatos(){
+  const all = [...prods.values()].map(p => p.m).filter(m => m.bodega === current), out = [];
+  if (CALIDAD.movVacios) out.push({ t:`${CALIDAD.movVacios} movimiento(s) con la cantidad vacía.`, f:'Complétalos en "Movimientos de inventario".' });
+  if (CALIDAD.sinBodega) out.push({ t:`${CALIDAD.sinBodega} producto(s) sin bodega asignada.`, f:'Asígnales bodega en AppSheet; mientras tanto quedan en ' + BODEGAS[0] + '.' });
+  if (CALIDAD.sinProveedor) out.push({ t:`${CALIDAD.sinProveedor} producto(s) sin proveedor.`, f:'Sin proveedor no se pueden armar sus órdenes de compra.' });
+  const sinMin = all.filter(m => !m.min).length; if (sinMin) out.push({ t:`${sinMin} producto(s) sin StockMin.`, f:'Solo alertan cuando llegan a 0. Llénalo en Config3D, columna D.' });
+  const maxMin = all.filter(m => m.min && m.max <= m.min).length; if (maxMin) out.push({ t:`${maxMin} producto(s) con StockMax menor o igual al mínimo.`, f:'El pedido se calcula a 2 × mínimo. Pon la capacidad real en Config3D, columna E.' });
+  const maxBajo = all.filter(m => m.max < m.stock).length; if (maxBajo) out.push({ t:`${maxBajo} producto(s) con más stock que su StockMax.`, f:'Revisa la capacidad real o deja StockMax vacío.' });
+  const neg = all.filter(m => m.stock < 0).length; if (neg) out.push({ t:`${neg} producto(s) con stock negativo.`, f:'Falta registrar una entrada.' });
+  const sinLead = all.filter(m => status(m) !== 'ok' && !m.lead).length; if (sinLead) out.push({ t:`${sinLead} producto(s) en alerta sin días de entrega.`, f:'Llénalos en Proveedores, columna DiasEntrega.' });
+  return out;
+}
+/* ---------- Sofía: toda entrada de mercancía debe tener documento soporte y estar en Siigo ---------- */
+let ENTRADAS = [], ENT_COLS = { documento:false, siigo:false };
+function prodPorId(id){ const k = String(id).trim().replace(/^0+(?=\d)/, ''); for (const p of prods.values()) if (String(p.m.id).trim().replace(/^0+(?=\d)/, '') === k) return p.m; return null; }
+function entradaTxt(e){
+  const m = prodPorId(e.producto), b = m && bays.find(x => x.m && x.m.id === m.id);
+  return `${e.fecha ? fechaTxt(new Date(e.fecha)) + ' · ' : ''}${b ? link(b) : '<b>' + esc(m ? m.nombre : e.producto) + '</b>'}${m && !b ? ' <small>(' + esc(m.bodega) + ')</small>' : ''} <b>+${fmt(e.cantidad)} ${esc(m ? m.unidad : '')}</b>` +
+    (e.documento ? ` · doc. ${esc(e.documento.length > 24 ? e.documento.slice(0, 22) + '…' : e.documento)}` : '') + (e.id ? ` <small>(${esc(e.id)})</small>` : '');
+}
+function docsInfo(){
+  const all = ENTRADAS.filter(e => { const m = prodPorId(e.producto); return m ? m.bodega === current : current === BODEGAS[0]; }), sinDoc = ENT_COLS.documento ? all.filter(e => !e.documento) : [], sinSiigo = ENT_COLS.siigo ? all.filter(e => !e.siigo) : [];
+  const falta = 'Para revisar los soportes, la hoja "Movimientos de inventario" necesita las columnas <b>Documento</b> y <b>Siigo</b>. En Apps Script ejecuta <b>prepararColumnas</b> y luego, en AppSheet, <b>Regenerate structure</b>.';
+  const resumen = !ENT_COLS.documento && !ENT_COLS.siigo ? 'Para revisar los documentos de las entradas me faltan las columnas Documento y Siigo en "Movimientos de inventario".'
+    : `De <b>${all.length} entradas</b> de mercancía (últimos 60 días), <b>${sinDoc.length} sin documento</b> y <b>${sinSiigo.length} sin subir a Siigo</b>.`;
+  return { all, sinDoc, sinSiigo, sinSiigoConDoc: sinSiigo.filter(e => e.documento).length, falta, resumen };
+}
+function conteoHoy(){
+  const act = bays.filter(b => b.m).sort((a, b) => a.code.localeCompare(b.code));
+  if (!act.length) return [];
+  const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 864e5);
+  const alert = act.filter(b => b.state !== 'ok').slice(0, 2), out = [...alert];
+  for (let k = 0; out.length < Math.min(5, act.length) && k < act.length; k++){ const b = act[(doy * 3 + k) % act.length]; if (out.indexOf(b) < 0) out.push(b); }
+  return out;
+}
+function urgente(a){
+  if (a.id === 'carlos'){ const r = ultimoReporte(); return !r || new Date(r.Fecha).toDateString() !== new Date().toDateString(); }
+  if (a.id === 'laura') return cruce().falta.length > 0;
+  if (a.id === 'andres') return movHist.some(e => e.bodega === current && e.hora && Date.now() - e.hora < 10 * 60e3);
+  if (a.id === 'pedro') return PROD.req.length > 0 || !!(PROD.entrega && PROD.entrega.lineas && PROD.entrega.lineas.length) || simular('hoy').res.some(x => !x.ok);
+  if (a.id === 'sofia'){ const d = docsInfo(); return problemasDatos().length > 0 || d.sinDoc.length > 0 || d.sinSiigo.length > 0; }
+  return false;
+}
+
+/* ---------- lo que dice cada agente ---------- */
+const H = () => { const h = new Date().getHours(); return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'; };
+const GUION = {
+  carlos: {
+    saludo(){
+      const r = ultimoReporte(), inf = infoBodega(), crit = inf.filter(x => x.st === 'crit'), low = inf.filter(x => x.st === 'low');
+      let rep = !r ? 'Todavía no hay reportes en la bitácora: activa el reporte diario con <b>activarReporteDiario</b> en Apps Script.'
+        : new Date(r.Fecha).toDateString() === new Date().toDateString() ? `El reporte diario salió hoy a las <b>${horaTxt(new Date(r.Fecha))}</b>.`
+        : `El último reporte salió el ${fechaTxt(new Date(r.Fecha))} a las ${horaTxt(new Date(r.Fecha))}. <b>Hoy todavía no ha salido.</b>`;
+      let t = `${H()}. ${rep} En <b>${esc(current)}</b> hay <b>${crit.length} críticos</b> y ${low.length} bajos de ${inf.length} productos.`;
+      if (crit.length) t += ' Lo más urgente: ' + crit.sort((a, b) => (a.cb ?? 1e9) - (b.cb ?? 1e9)).slice(0, 3).map(x => link(x.b)).join(', ') + '.';
+      return t;
+    },
+    opciones: {
+      '¿Cómo están las bodegas?'(){
+        return 'Así van las bodegas:' + lista(BODEGAS.map(n => {
+          const ps = [...prods.values()].map(p => p.m).filter(m => m.bodega === n), c = ps.filter(m => status(m) === 'crit').length, l = ps.filter(m => status(m) === 'low').length;
+          const val = ps.reduce((a, m) => a + num(pick(lowerKeys(m.raw || {}), ['preciounitariocompra','precio','costo'])) * Math.max(0, m.stock), 0);
+          return `<b>${esc(n)}</b>: ${ps.length} productos · ${c} críticos · ${l} bajos` + (val ? ` · $${Math.round(val).toLocaleString('es-CO')} en inventario` : '');
+        }));
+      },
+      'Muéstrame los críticos'(){
+        const c = infoBodega().filter(x => x.st === 'crit');
+        return !c.length ? `No hay productos críticos en ${esc(current)}.` : `Críticos en ${esc(current)}:` + lista(c.slice(0, 12).map(x => `${link(x.b)}: ${fmt(x.m.stock)} de mínimo ${fmt(x.m.min)} ${esc(x.m.unidad)} · rack ${x.b.code}`));
+      },
+      'Reenvíame el reporte'(reply){
+        server('agenteReenviarReporte', [current], r => reply(`Listo, te lo envié: “${esc(r)}”.`), e => reply(esc(e)));
+        return 'Ya lo estoy enviando…';
+      },
+      '¿Qué dice la bitácora?'(){
+        return !BITACORA.length ? 'La bitácora está vacía. Se llena cuando los agentes envían reportes u órdenes.' :
+          'Lo último que hicimos:' + lista(BITACORA.slice(0, 6).map(e => `${fechaTxt(new Date(e.Fecha))} ${horaTxt(new Date(e.Fecha))} · <b>${esc(e.Agente)}</b>: ${esc(e.Evento)}`));
+      }
+    }
+  },
+  laura: {
+    saludo(){
+      const p = planCompras(), provs = new Set(p.hoy.map(x => prov(x.m)));
+      if (!p.hoy.length && !p.semana.length) return `${H()}. En <b>${esc(current)}</b> no hay nada que pedir esta semana.`;
+      return `${H()}. Hoy hay que pedir <b>${p.hoy.length} productos</b> de ${esc(current)}` + (provs.size ? ` a ${provs.size} ${provs.size === 1 ? 'proveedor' : 'proveedores'}` : '') + `, y ${p.semana.length} más en los próximos 7 días.` +
+        (p.hoy[0] ? ` El que más urge es ${link(p.hoy[0].b)}.` : '');
+    },
+    opciones: {
+      '¿Qué pido hoy?'(){
+        const h = planCompras().hoy;
+        return !h.length ? 'Hoy no hay pedidos urgentes.' : 'Para pedir hoy:' + lista(h.slice(0, 15).map(x => `${link(x.b)}: <b>${fmt(x.pq)} ${esc(x.m.unidad)}</b> · ${esc(prov(x.m))}`));
+      },
+      'Pedidos por proveedor'(){
+        const p = planCompras(), g = {};
+        p.hoy.concat(p.semana).filter(x => x.pq > 0).forEach(x => (g[prov(x.m)] = g[prov(x.m)] || []).push(x));
+        const ks = Object.keys(g).sort();
+        return !ks.length ? 'No hay pedidos sugeridos.' : 'Así quedarían las órdenes:' + lista(ks.map(k => `<b>${esc(k)}</b>: ` + g[k].map(x => `${link(x.b)} ${fmt(x.pq)} ${esc(x.m.unidad)}`).join(' · ')));
+      },
+      '¿Qué pido esta semana?'(){
+        const s = planCompras().semana;
+        return !s.length ? 'Nada más para esta semana.' : 'En los próximos 7 días:' + lista(s.slice(0, 15).map(x => `${link(x.b)}: ${fmt(x.pq)} ${esc(x.m.unidad)} · pedir antes del <b>${x.dPed === null ? '—' : enDias(x.dPed)}</b>`));
+      },
+      'Envíame las órdenes por correo'(reply){
+        server('enviarOrdenesCompra', [current], r => reply(esc(r)), e => reply(esc(e)));
+        return `Preparo las órdenes de ${esc(current)} y te las envío…`;
+      }
+    }
+  },
+  andres: {
+    saludo(){
+      const ms = movHist.filter(e => e.bodega === current), u = ms[0];
+      const pronto = infoBodega().filter(x => x.cb !== null && x.cb <= 7).length;
+      return `${H()}. ` + (u ? `El último movimiento en ${esc(current)} fue una <b>${u.tipo === 'out' ? 'salida' : 'entrada'} de ${fmt(u.cantidad)} ${esc(u.unidad)}</b> de ${esc(u.nombre)}` + (u.hora && !isNaN(u.hora) ? ` (${fechaTxt(u.hora)} ${horaTxt(u.hora)})` : '') + '.' : `No he visto movimientos en ${esc(current)}.`) +
+        (pronto ? ` Ojo: <b>${pronto} productos</b> se agotarían en menos de 7 días.` : '');
+    },
+    opciones: {
+      'Últimos movimientos'(){
+        const ms = movHist.filter(e => e.bodega === current).slice(0, 8);
+        return !ms.length ? 'Sin movimientos registrados en esta bodega.' : 'Últimos movimientos:' + lista(ms.map(e => `${e.hora && !isNaN(e.hora) ? fechaTxt(e.hora) + ' ' + horaTxt(e.hora) + ' · ' : ''}${e.tipo === 'out' ? 'Salida' : 'Entrada'} <b>${e.tipo === 'out' ? '−' : '+'}${fmt(e.cantidad)} ${esc(e.unidad)}</b> ${esc(e.nombre)}` + (e.usuario ? ` · ${esc(e.usuario)}` : '')));
+      },
+      '¿Qué se agota esta semana?'(){
+        const s = infoBodega().filter(x => x.cb !== null && x.cb <= 7).sort((a, b) => a.cb - b.cb);
+        return !s.length ? 'Nada se agota en los próximos 7 días, según el consumo actual.' : 'Se agotarían pronto:' + lista(s.map(x => `${link(x.b)}: ${aprox(x.m)}${enDias(x.cb)} (${fmtDias(x.cb).toLowerCase()})`));
+      },
+      'Mayores salidas'(){
+        const t = {};
+        movHist.filter(e => e.bodega === current && e.tipo === 'out').forEach(e => { t[e.id] = t[e.id] || { e, c:0 }; t[e.id].c += e.cantidad; });
+        const top = Object.values(t).sort((a, b) => b.c - a.c).slice(0, 5);
+        return !top.length ? 'No hay salidas registradas.' : 'Lo que más ha salido:' + lista(top.map(x => `${esc(x.e.nombre)}: <b>${fmt(x.c)} ${esc(x.e.unidad)}</b>`));
+      }
+    }
+  },
+  sofia: {
+    saludo(){
+      const p = problemasDatos(), d = docsInfo();
+      return `${H()}. Revisé los datos de ${esc(current)}. ` + (p.length ? `Encontré <b>${p.length} ${p.length === 1 ? 'punto' : 'puntos'} por corregir</b>; sin datos limpios, los pedidos y las fechas salen mal.` : 'Todo está en orden.') + ' ' + d.resumen;
+    },
+    opciones: {
+      'Entradas sin documento'(){
+        const d = docsInfo(); if (!ENT_COLS.documento) return d.falta;
+        return !d.sinDoc.length ? 'Todas las entradas de los últimos 60 días tienen su documento soporte.'
+          : `Estas <b>${d.sinDoc.length}</b> entradas no tienen documento. Súbelo en la columna Documento de "Movimientos de inventario":` + lista(d.sinDoc.slice(0, 25).map(entradaTxt)) + (d.sinDoc.length > 25 ? `<small>… y ${d.sinDoc.length - 25} más.</small>` : '');
+      },
+      'Falta subir a Siigo'(){
+        const d = docsInfo(); if (!ENT_COLS.siigo) return d.falta;
+        return !d.sinSiigo.length ? 'Todas las entradas ya están en Siigo.'
+          : `Faltan <b>${d.sinSiigo.length}</b> entradas por subir a Siigo` + (d.sinSiigoConDoc ? ` (${d.sinSiigoConDoc} ya tienen documento: empieza por esas)` : '') + ':' + lista(d.sinSiigo.slice(0, 25).map(entradaTxt)) + (d.sinSiigo.length > 25 ? `<small>… y ${d.sinSiigo.length - 25} más.</small>` : '');
+      },
+      'Resumen de documentos'(){
+        const d = docsInfo(); if (!ENT_COLS.documento && !ENT_COLS.siigo) return d.falta;
+        return `Entradas de mercancía de los últimos 60 días: <b>${d.all.length}</b>` + lista([`Con documento: <b>${d.all.length - d.sinDoc.length}</b>`, `<b style="color:var(--crit)">Sin documento: ${d.sinDoc.length}</b>`,
+          `Subidas a Siigo: <b>${d.all.length - d.sinSiigo.length}</b>`, `<b style="color:var(--crit)">Falta subir a Siigo: ${d.sinSiigo.length}</b>`]);
+      },
+      '¿Qué hay que corregir?'(){
+        const p = problemasDatos();
+        return !p.length ? 'Nada por corregir.' : lista(p.map(x => `<b>${esc(x.t)}</b> ${esc(x.f)}`));
+      },
+      'Productos sin mínimo'(){
+        const s = bays.filter(b => b.m && !b.m.min);
+        return !s.length ? `Todos los productos de ${esc(current)} tienen mínimo.` : `En ${esc(current)} no tienen StockMin:` + lista(s.slice(0, 20).map(b => `${link(b)} · ${b.code}`));
+      },
+      'StockMax mal puesto'(){
+        const s = bays.filter(b => b.m && ((b.m.min && b.m.max <= b.m.min) || b.m.max < b.m.stock));
+        return !s.length ? 'Los StockMax de esta bodega se ven bien.' : 'Revisa el StockMax de:' + lista(s.slice(0, 20).map(b => `${link(b)}: stock ${fmt(b.m.stock)}, mín ${fmt(b.m.min)}, máx ${fmt(b.m.max)}`));
+      }
+    }
+  },
+  miguel: {
+    saludo(){
+      const c = conteoHoy();
+      return !c.length ? `No hay productos para contar en ${esc(current)}.` : `${H()}. Hoy toca contar <b>${c.length} racks</b> en ${esc(current)}: ` + c.map(b => `${b.code} ${link(b)}`).join(', ') + '.';
+    },
+    opciones: {
+      '¿Qué toca contar hoy?'(){
+        const c = conteoHoy();
+        return !c.length ? 'Nada por contar.' : 'Cuenta y compara con lo que dice el sistema:' + lista(c.map(b => `<b>${b.code}</b> ${link(b)}: el sistema dice <b>${fmt(b.m.stock)} ${esc(b.m.unidad)}</b>` + (b.state !== 'ok' ? ' (en alerta)' : '')));
+      },
+      'Llévame al primero'(){
+        const b = conteoHoy()[0]; if (!b) return 'No hay racks para contar.';
+        setTimeout(() => { closeChat(); goToBay(b); }, 900);
+        return `Vamos al rack <b>${b.code}</b>: ${esc(b.m.nombre)}. El sistema dice ${fmt(b.m.stock)} ${esc(b.m.unidad)}.`;
+      },
+      '¿Cómo registro un conteo?'(){
+        return 'Si lo que cuentas no coincide con el sistema, registra en AppSheet un movimiento de <b>ajuste</b> en "Movimientos de inventario": <b>Cantidad = conteo − sistema</b>. Si faltan unidades, queda negativo. Así el stock queda igual a lo que hay en el rack.';
+      }
+    }
+  }
+};
+
+/* ---------- Pedro · Producción: pedidos + BOM → materia prima (Produccion.gs) ---------- */
+let PROD = { activo:false, pedidos:[], req:[], bomPT:0, ptTotal:0, bomMalos:[], nBomMalos:0 };
+const normId = id => String(id).trim().replace(/^0+(?=\d)/, '');
+function mpDe(id){ return prodPorId(id); }
+function mpTxt(id, cant){ const m = mpDe(id); return (m ? linkM(m) : '<b>' + esc(id) + '</b>') + ` <b>${fmt(Math.round(cant * 100) / 100)} ${esc(m ? m.unidad : '')}</b>`; }
+// los pedidos de un producto terminado de otra línea (otra bodega) los atiende el productor de esa bodega
+const deEstaBodega = p => !p.linea || claveBodega(p.linea) === claveBodega(current);
+function enHorizonte(p, h){
+  if (h === 'todo') return true;
+  const lim = new Date(); lim.setHours(23, 59, 59, 999);
+  return (p.entrega ? Date.parse(p.entrega) : 0) <= lim.getTime() + (h === 'semana' ? 7 * 864e5 : 0);
+}
+// reparte el stock actual: primero lo que se quedó debiendo, luego los pedidos por fecha de entrega
+function simular(h){
+  const disp = {}, falta = {};
+  const k = id => { const n = normId(id); if (!(n in disp)){ const m = mpDe(id); disp[n] = m ? Math.max(0, m.stock) : 0; } return n; };
+  const debe = (id, c, ped) => { const n = normId(id); falta[n] = falta[n] || { id, cant:0, pedidos:new Set() }; falta[n].cant += c; falta[n].pedidos.add(ped); };
+  PROD.req.forEach(r => { const n = k(r.id), t = Math.min(disp[n], r.pendiente); disp[n] -= t; if (r.pendiente - t > 1e-6) debe(r.id, r.pendiente - t, r.pedido); });
+  const ped = PROD.pedidos.filter(p => !p.descontado && enHorizonte(p, h) && deEstaBodega(p))
+    .sort((a, b) => (Date.parse(a.entrega) || 9e15) - (Date.parse(b.entrega) || 9e15));
+  const res = ped.map(p => {
+    const f = [];
+    p.lineas.forEach(([id, req]) => { const n = k(id), t = Math.min(disp[n], req); disp[n] -= t; if (req - t > 1e-6){ f.push([id, req - t]); debe(id, req - t, p.id); } });
+    return { p, f, ok: p.bom && !f.length };
+  });
+  return { res, falta: Object.values(falta) };
+}
+const pedTxt = x => `<b>${esc(x.p.id)}</b> · ${fmt(x.p.cant)} × ${esc(x.p.pt)}` + (x.p.cliente ? ` · ${esc(x.p.cliente)}` : '') + (x.p.entrega ? ` · entrega ${fechaTxt(new Date(x.p.entrega))}` : '') +
+  (x.p.estado && !/pendiente/i.test(x.p.estado) ? ` · <i>${esc(x.p.estado)}</i>` : '') +
+  (!x.p.bom ? ' · <b style="color:var(--crit)">sin BOM</b>' : x.ok ? ' · <b style="color:var(--ok)">alcanza</b>' : '<br><small style="color:var(--crit)">Falta: ' + x.f.map(([id, c]) => { const m = mpDe(id); return esc(m ? m.nombre : id) + ' ' + fmt(Math.round(c * 100) / 100) + ' ' + esc(m ? m.unidad : ''); }).join(' · ') + '</small>');
+const btn = (txt, attrs) => `<button type="button" class="pact" ${attrs}>${txt}</button>`;
+const PEDRO_FN = ['iniciarProduccion', 'enviarRequisicion', 'enviarAuditoriaCompras'];
+function listaPedidos(h){
+  const s = simular(h), nom = h === 'hoy' ? 'hoy' : 'esta semana';
+  if (!s.res.length) return `No hay pedidos pendientes para ${nom}.`;
+  const ok = s.res.filter(x => x.ok).length;
+  return `Pedidos para ${nom}: con el stock actual alcanzo <b>${ok} de ${s.res.length}</b>.` + lista(s.res.slice(0, 25).map(pedTxt)) +
+    (s.res.length > 25 ? `<small>… y ${s.res.length - 25} más.</small>` : '') +
+    (s.falta.length ? btn('¿Qué falta comprar?', 'data-ask="¿Qué falta comprar?"') : '') + btn('Pasar a producción los de ' + nom, `data-fn="iniciarProduccion" data-arg="${h}"`);
+}
+GUION.pedro = {
+  saludo(){
+    if (!PROD.activo) return `${H()}. Soy ${esc(equipoDe(current).pedro)}, de producción de ${esc(current)}. Cuando subas los pedidos, calculo con la lista de materiales (BOM) qué materia prima se necesita y la descuento del inventario al empezar la producción.` +
+      ' Para arrancar, en tu hoja usa el menú <b>🏭 Producción → Crear pestañas de producción</b>. Después cárgame el BOM y los pedidos en Excel con los botones de abajo.';
+    const hoy = simular('hoy'), sem = simular('semana'), okH = hoy.res.filter(x => x.ok).length, okS = sem.res.filter(x => x.ok).length;
+    let t = `${H()}. En ${esc(current)} hay <b>${PROD.pedidos.filter(p => !p.descontado && deEstaBodega(p)).length} pedidos</b> por producir. Para hoy: ${hoy.res.length ? `alcanzo <b>${okH} de ${hoy.res.length}</b>` : 'ninguno'}. Esta semana: ${sem.res.length ? `alcanzo <b>${okS} de ${sem.res.length}</b>` : 'ninguno'}.`;
+    if (sem.falta.length) t += ` Para cumplir todo falta comprar <b>${sem.falta.length} materias primas</b>.`;
+    if (PROD.req.length) t += ` Quedaron <b>${PROD.req.length} ${PROD.req.length === 1 ? 'faltante' : 'faltantes'}</b> de pedidos que ya están en producción; salen en la próxima lista de entrega.`;
+    const E = PROD.entrega; if (E && E.lineas && E.lineas.length) t += ` Hay una <b>lista de entrega</b> de ${E.lineas.length} materias primas esperando que bodega la confirme.`;
+    const sinBom = PROD.pedidos.filter(p => !p.bom).length; if (sinBom) t += ` Ojo: ${sinBom} pedido(s) son de productos sin BOM.`;
+    return t;
+  },
+  opciones: {
+    'Pedidos de hoy'(){ return listaPedidos('hoy'); },
+    'Pedidos de la semana'(){ return listaPedidos('semana'); },
+    '¿Qué falta comprar?'(){
+      const f = simular('semana').falta;
+      if (!f.length) return 'Con el stock actual alcanza para todos los pedidos de la semana y los faltantes anteriores. No hay que comprar nada para producción.';
+      const g = {}; f.forEach(x => { const m = mpDe(x.id), pv = m ? provDe(m) : 'sin proveedor'; (g[pv] = g[pv] || []).push(x); });
+      return 'Para cumplir los pedidos de la semana (y lo que quedó debiendo) hay que comprar:' +
+        lista(Object.keys(g).sort().map(pv => `<b>${esc(pv)}</b>: ` + g[pv].map(x => mpTxt(x.id, x.cant) + ` <small>(${[...x.pedidos].slice(0, 4).map(esc).join(', ')}${x.pedidos.size > 4 ? '…' : ''})</small>`).join(' · '))) +
+        (PROD.req.length ? btn('Envíame la requisición', 'data-fn="enviarRequisicion"') : '');
+    },
+    'Iniciar producción de hoy'(){
+      const s = simular('hoy');
+      if (!s.res.length) return 'No hay pedidos pendientes para hoy. ' + btn('Ver los de la semana', 'data-ask="Pedidos de la semana"');
+      const malos = s.res.filter(x => !x.ok);
+      return `Si arranco hoy, paso <b>${s.res.length} pedido(s)</b> a "En producción" y armo la <b>lista de entrega</b> para bodega. No se descuenta nada hasta que bodega confirme lo que entregó.` +
+        (malos.length ? ` <b style="color:var(--crit)">${malos.length} no alcanzan completos</b> con el stock actual: lo que no se entregue queda en Requisiciones.` : ' Alcanza para todos.') +
+        lista(s.res.slice(0, 12).map(pedTxt)) + btn('Sí, pasar a producción', 'data-fn="iniciarProduccion" data-arg="hoy"');
+    },
+    'Faltantes de pedidos en producción'(){
+      if (!PROD.req.length) return 'No hay faltantes: a todo lo que está en producción ya se le entregó su materia prima.';
+      return 'A estos pedidos les faltó materia prima en la entrega. Salen otra vez en la próxima lista de entrega:' +
+        lista(PROD.req.slice(0, 25).map(r => `<b>${esc(r.pedido)}</b>: ` + mpTxt(r.id, r.pendiente) + (r.proveedor ? ` · ${esc(r.proveedor)}` : ''))) + btn('Envíame la requisición', 'data-fn="enviarRequisicion"');
+    },
+    'Cargar pedidos (Excel)'(){
+      return 'Elige el Excel de las órdenes de pedido. Busco solo las columnas <b>Pedido</b>, <b>Cliente</b>, <b>Producto</b> o <b>Código</b>, <b>Cantidad</b>, <b>Fecha de entrega</b> y <b>Tela</b> (la que eligió el cliente); no importa el orden. Si la tela no está en inventario, queda para comprar aparte. Entran como <b>Pendiente</b>: no descuento nada hasta que pasen a producción.' +
+        btn('📄 Elegir archivo de pedidos…', 'data-excel="importarPedidos"');
+    },
+    'Cargar BOM (Excel)'(){
+      return 'Elige el Excel de la lista de materiales. Necesito por fila: <b>Producto terminado</b> (o su código), <b>Materia prima</b> (o su IDproducto), <b>Cantidad</b> por unidad y, si la tienes, <b>Merma %</b>. Si el producto terminado se escribe una sola vez y debajo van sus materias primas, también sirve. Reemplazo el BOM solo de los productos que vengan en el archivo.' +
+        btn('📄 Elegir archivo del BOM…', 'data-excel="importarBOM"');
+    },
+    'Lista de entrega'(){
+      abrirEntrega();
+      return 'Te abro la lista de lo que bodega le entrega hoy a producción. Revisa las cantidades, corrige lo que se haya entregado distinto y confirma: <b>solo al confirmar se descuenta</b>.';
+    },
+    'Revisar el BOM'(){
+      if (!PROD.activo) return 'Todavía no existe la pestaña BOM.';
+      const sin = [...new Set(PROD.pedidos.filter(p => !p.bom).map(p => p.pt))];
+      let t = `Hay BOM para <b>${PROD.bomPT} de ${PROD.ptTotal}</b> productos terminados.`;
+      if (sin.length) t += ' Pedidos de productos sin BOM (no puedo descontarlos):' + lista(sin.slice(0, 15).map(esc));
+      if (PROD.nBomMalos) t += ` <b>${PROD.nBomMalos} fila(s) del BOM</b> tienen problemas:` + lista(PROD.bomMalos.slice(0, 15).map(esc));
+      if (!sin.length && !PROD.nBomMalos) t += ' Todo está en orden.';
+      return t;
+    }
+  }
+};
+/* ---------- lista de entrega: bodega revisa, corrige y confirma; solo ahí se descuenta ---------- */
+let ENT = null;
+const fmtQ = n => fmt(Math.round(n * 1000) / 1000);
+function abrirEntrega(){
+  $('ent').hidden = false; $('entOk').hidden = true; $('entSub').textContent = '';
+  $('entBody').innerHTML = '<p>Armando la lista…</p>';
+  if (typeof google !== 'undefined' && google.script && google.script.run)
+    server('listaEntrega', [], j => pintarEntrega(typeof j === 'string' ? JSON.parse(j) : j), e => { $('entBody').innerHTML = '<p>' + esc(e) + '</p>'; });
+  else pintarEntrega(PROD.entrega || { lineas:[], pedidos:[], reqs:[], avisos:[], comprar:[], porEntrega:[] });
+}
+function pintarEntrega(L){
+  ENT = L; const peds = [...new Set((L.pedidos || []).map(p => p.id))];
+  $('entSub').textContent = peds.length ? peds.length + ' pedido(s) en producción' + (L.reqs && L.reqs.length ? ' + ' + L.reqs.length + ' pendiente(s) de entregas anteriores' : '') : (L.reqs && L.reqs.length ? L.reqs.length + ' pendiente(s) de entregas anteriores' : '');
+  let h = '';
+  if (L.avisos && L.avisos.length) h += '<div class="box"><b>No entran todavía:</b>' + lista(L.avisos.map(esc)) + '</div>';
+  if (!L.lineas.length) h += '<p>No hay nada por entregar. Pasa pedidos a "En producción" (por ejemplo con <b>Iniciar producción de hoy</b>) y aquí aparece la lista.</p>';
+  else h += '<p>Esto es lo que dicen los BOM. Si entregaste otra cantidad (se dañó una lámina, faltaron patas), cámbiala antes de confirmar. Lo que no se entregue queda pendiente para la próxima lista. Cada materia prima la entrega la bodega donde está guardada.</p><div class="tw"><table><thead><tr><th>Materia prima</th><th>Sale de</th><th>Pedidos</th><th>Según BOM</th><th>Entregado</th><th>Stock en sistema</th></tr></thead><tbody>' +
+    L.lineas.map((x, i) => ({ x, i })).sort((a, b) => String(a.x.bodega || '').localeCompare(String(b.x.bodega || ''))).map(({ x, i }) => `<tr><td><b>${esc(x.nombre)}</b></td><td><small>${esc(x.bodega || '—')}</small></td><td><small>${x.pedidos.map(esc).join(', ')}</small></td><td>${fmtQ(x.cant)} <small>${esc(x.unidad)}</small></td>
+      <td><input type="number" min="0" step="any" id="entQ${i}" data-i="${i}" value="${x.cant}" aria-label="Entregado de ${esc(x.nombre)}"></td>
+      <td${x.stock < x.cant ? ' style="color:var(--crit);font-weight:700"' : ''}>${fmtQ(x.stock)}</td></tr>`).join('') + '</tbody></table></div>';
+  if (L.porEntrega && L.porEntrega.length) h += '<div class="box"><b>Por entrega (no se descuentan aquí):</b> regístralas a mano cuando entregues el rollo, la caja o el bidón. Estos pedidos gastan aproximadamente:' + lista(L.porEntrega.map(x => `${esc(x.nombre)}: ${fmtQ(x.cant)} ${esc(x.unidad)}`)) + '</div>';
+  if (L.comprar && L.comprar.length) h += '<div class="box"><b>No está en inventario (comprar aparte):</b>' + lista(L.comprar.map(c => `${esc(c.pedido)}: ${esc(c.nombre)} ${fmtQ(c.cant)} ${esc(c.unidad)}`)) + '<small>Al confirmar quedan en Requisiciones.</small></div>';
+  $('entBody').innerHTML = h;
+  const ok = $('entOk'); ok.hidden = !(L.lineas.length || (L.comprar && L.comprar.length)); ok.disabled = false; delete ok.dataset.armado; ok.classList.remove('warn'); ok.textContent = 'Confirmar entrega';
+}
+$('entBody').addEventListener('input', e => { const i = e.target.closest('input[data-i]'); if (i) i.classList.toggle('dif', Number(i.value) !== ENT.lineas[+i.dataset.i].cant); });
+$('entClose').addEventListener('click', () => { $('ent').hidden = true; });
+$('entOk').addEventListener('click', () => {
+  const ok = $('entOk'); if (!ENT) return;
+  if (!ok.dataset.armado){ ok.dataset.armado = '1'; ok.classList.add('warn'); ok.textContent = 'Toca otra vez: se descuenta del inventario'; return; }
+  const cant = {}; ENT.lineas.forEach((x, i) => { const v = $('entQ' + i).value; cant[x.key] = v === '' ? 0 : Number(v); });
+  ok.disabled = true; ok.textContent = 'Registrando…';
+  server('confirmarEntrega', [JSON.stringify({ pedidos: ENT.pedidos.map(p => ({ fila: p.fila, id: p.id })), reqs: ENT.reqs, cant })],
+    r => { $('entBody').innerHTML = '<p>✅ ' + esc(r) + '</p>'; ok.hidden = true; if (chatAgent && chatAgent.id === 'pedro') say('✅ ' + esc(r)); },
+    e => { $('entBody').insertAdjacentHTML('afterbegin', '<p style="color:var(--crit)">' + esc(e) + '</p>'); ok.disabled = false; ok.textContent = 'Confirmar entrega'; delete ok.dataset.armado; ok.classList.remove('warn'); });
+});
+/* ---------- leer Excel en el navegador (SheetJS) y mandarlo a la hoja ---------- */
+let xlsxP = null;
+function cargarXLSX(){
+  return xlsxP = xlsxP || new Promise((ok, ko) => {
+    if (window.XLSX) return ok();
+    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = ok; s.onerror = () => { xlsxP = null; ko(new Error('no pude cargar el lector de Excel')); }; document.head.appendChild(s);
+  });
+}
+function elegirExcel(fn){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xlsx,.xls,.xlsm,.csv';
+  inp.addEventListener('change', async () => {
+    const f = inp.files[0]; if (!f) return;
+    say('Leyendo <b>' + esc(f.name) + '</b>…');
+    try {
+      await cargarXLSX();
+      const wb = XLSX.read(await f.arrayBuffer(), { type:'array', cellDates:true });
+      const hojas = wb.SheetNames.map(n => ({ nombre:n, filas: XLSX.utils.sheet_to_json(wb.Sheets[n], { header:1, raw:true, defval:'' }).slice(0, 5000)
+        .map(r => r.map(v => v instanceof Date ? v.toISOString() : v)) }));
+      const n = hojas.reduce((a, h) => a + h.filas.length, 0);
+      say(`Encontré ${n} filas en ${hojas.length} hoja(s). Las paso a tu hoja de cálculo…`);
+      server(fn, [hojas, f.name], r => say('✅ ' + esc(r)), e => say(esc(e)));
+    } catch (e){ say('No pude leer el archivo: ' + esc(e.message || e)); }
+  });
+  inp.click();
+}
+function accionPedro(b){
+  if (b.dataset.excel) return elegirExcel(b.dataset.excel);
+  if (b.dataset.ask) return ask(b.dataset.ask);
+  if (b.dataset.entrega) return abrirEntrega();
+  const fn = b.dataset.fn; if (PEDRO_FN.indexOf(fn) < 0) return;
+  if (b.dataset.confirm && !b.dataset.armado){ b.dataset.armado = '1'; b.classList.add('warn'); b.textContent = 'Toca otra vez para confirmar: descuenta del inventario'; return; }
+  b.disabled = true; say('Trabajando…');
+  server(fn, b.dataset.arg ? [b.dataset.arg] : [], r => say('✅ ' + esc(r) + (fn === 'iniciarProduccion' ? btn('Abrir la lista de entrega', 'data-entrega="1"') : '')), e => say(esc(e)));
+}
+
+/* ---------- instructivo de cada agente: qué hace, qué preguntarle y tips ---------- */
+const AYUDA = {
+  carlos: { quien: 'Soy el jefe de bodega. Te doy el panorama de la bodega y me encargo del reporte diario de las 7 a. m.',
+    ops: [['¿Cómo están las bodegas?', 'Resumen de las 4 bodegas: productos, críticos, bajos y valor del inventario.'],
+          ['Muéstrame los críticos', 'Lo que está en el mínimo o por debajo en esta bodega, con su rack.'],
+          ['Reenvíame el reporte', 'Te mando ya el reporte de esta bodega, sin esperar a las 7.'],
+          ['¿Qué dice la bitácora?', 'Lo último que hicimos los agentes: reportes, órdenes, entregas.']],
+    tips: ['Cada bodega tiene su propio equipo con los mismos nombres: lo que te digo es solo de la bodega en la que estás.',
+           'El equipo: Laura (compras), Andrés (movimientos), Sofía (datos y documentos), Miguel (conteos) y Pedro (producción).'] },
+  laura: { quien: 'Soy la de compras. Te digo qué pedir, a quién, y reviso lo que pide el área de compras contra el inventario.',
+    ops: [['¿Qué ha entrado?', 'Las últimas entradas de mercancía, con su documento.'],
+          ['Cruce de hoy', 'Lo que había que pedir hoy frente a lo que compras ya pidió.'],
+          ['Falta por pedir', 'Lo que necesita pedido y nadie ha solicitado todavía.'],
+          ['Pendientes de entrega', 'Solicitudes de compras que aún no han llegado.'],
+          ['Pedidos sin necesidad', 'Solicitudes pendientes de productos que hoy tienen stock normal.'],
+          ['Auditoría de compras', 'Reviso las compras que todavía no han llegado (sin evidencia ni firma): si de verdad hacen falta o se pasan del máximo.'],
+          ['Pedidos por proveedor', 'Las órdenes sugeridas agrupadas por proveedor.'],
+          ['Envíame las órdenes por correo', 'Te mando por correo las órdenes de compra de esta bodega.']],
+    tips: ['Cuando entra mercancía te aviso con un globo junto a mi burbuja.',
+           'Si un producto de compras no lo reconozco, agrégalo en la pestaña "Equivalencias compras" de la hoja.'] },
+  andres: { quien: 'Vigilo los movimientos: qué sale, qué entra y qué se va a agotar.',
+    ops: [['Últimos movimientos', 'Las últimas entradas y salidas de esta bodega, con quién las hizo.'],
+          ['¿Qué se agota esta semana?', 'Productos que se acaban en menos de 7 días con el consumo actual.'],
+          ['Mayores salidas', 'Lo que más ha salido de la bodega.']],
+    tips: ['Para ver TODOS los movimientos con filtros por fecha, tipo y documento, usa "Ver todos" en el panel de movimientos.'] },
+  sofia: { quien: 'Reviso que los datos estén limpios y que cada entrada tenga su documento y esté en Siigo.',
+    ops: [['¿Qué hay que corregir?', 'Datos que hacen que los cálculos salgan mal (sin mínimo, sin bodega, stock negativo…).'],
+          ['Entradas sin documento', 'Entradas de mercancía que no tienen factura o remisión.'],
+          ['Falta subir a Siigo', 'Entradas que todavía no se han registrado en Siigo.'],
+          ['Resumen de documentos', 'Cuántas entradas tienen documento y cuántas están en Siigo.'],
+          ['Productos sin mínimo', 'Productos que solo alertan cuando llegan a 0.'],
+          ['StockMax mal puesto', 'Máximos que no cuadran con el mínimo o con el stock.']],
+    tips: ['Sin mínimos y máximos reales, Carlos y Laura no pueden decirte bien qué pedir ni cuánto.'] },
+  miguel: { quien: 'Hago el conteo cíclico: cada día te digo qué racks contar para que el sistema cuadre con lo que hay.',
+    ops: [['¿Qué toca contar hoy?', 'Los racks de hoy, con lo que dice el sistema para comparar.'],
+          ['Llévame al primero', 'Te llevo al primer rack en el recorrido.'],
+          ['¿Cómo registro un conteo?', 'Cómo hacer el ajuste cuando lo contado no coincide.']],
+    tips: ['Contar unos pocos racks cada día es más fácil que hacer un inventario completo, y detecta a tiempo lo que se descuadra.'] },
+  pedro: { quien: 'Soy el de producción: cargo pedidos y la lista de materiales (BOM), te digo qué alcanza y armo la lista de entrega.',
+    ops: [['Pedidos de hoy', 'Los pedidos para hoy y si alcanza la materia prima para cada uno.'],
+          ['Pedidos de la semana', 'Lo mismo para los próximos 7 días.'],
+          ['¿Qué falta comprar?', 'La materia prima que falta para cumplir los pedidos.'],
+          ['Iniciar producción de hoy', 'Paso los pedidos de hoy a "En producción".'],
+          ['Faltantes de pedidos en producción', 'Lo que faltó entregarle a producción; sale en la próxima lista.'],
+          ['Lista de entrega', 'Lo que bodega le entrega a producción. Solo al confirmarla se descuenta del inventario.'],
+          ['Cargar pedidos (Excel)', 'Subes el Excel de las órdenes de pedido.'],
+          ['Cargar BOM (Excel)', 'Subes la lista de materiales de los productos.'],
+          ['Revisar el BOM', 'Productos sin BOM o con materias primas que no existen.']],
+    tips: ['Si un pedido ya está en producción, lo automático (espumas, tablas, patas…) NO se registra a mano: sale con la lista de entrega.',
+           'Lo "por entrega" (pegante, grapas, hilos, Briony, cincha) sí se registra a mano cuando sale el rollo, la caja o el bidón.'] }
+};
+function ayudaAgente(a){
+  const h = AYUDA[a.id]; if (!h) return '';
+  const ops = h.ops.filter(([q]) => GUION[a.id].opciones[q]);
+  return `<div class="ayu"><h4>Así te puedo ayudar, ${esc(a.nombre)} · ${esc(a.rol)}</h4><p>${esc(h.quien)}</p>` +
+    `<div class="t">${ops.map(([q, d]) => `<button type="button" class="pact-ask" data-q="${esc(q)}"><b>${esc(q)}</b><small>${esc(d)}</small></button>`).join('')}</div>` +
+    h.tips.map(t => `<div class="tip">💡 ${esc(t)}</div>`).join('') + '</div>';
+}
+/* ---------- servidor (acciones reales solo en la app publicada) ---------- */
+function server(fn, args, ok, fail){
+  if (typeof google !== 'undefined' && google.script && google.script.run)
+    google.script.run.withSuccessHandler(ok).withFailureHandler(e => fail('No pude hacerlo: ' + (e && e.message || e)))[fn](...args);
+  else setTimeout(() => fail('En la demo no puedo enviar correos ni cambiar tu hoja. En tu aplicación publicada sí lo hago.'), 500);
+}
+
+/* ---------- panel de conversación ---------- */
+function openChat(a){
+  if (chatAgent && chatAgent !== a) chatAgent.npc.talking = false;
+  chatAgent = a; a.npc.talking = true; a.npc.clip.visible = false;
+  if (a.id === 'laura' && typeof ENTRADAS_NUEVAS !== 'undefined') ENTRADAS_NUEVAS = ENTRADAS_NUEVAS.filter(e => e.bodega !== current);
+  $('chAv').style.background = a.css; $('chAv').textContent = a.nombre[0];
+  $('chName').textContent = a.nombre; $('chRole').textContent = a.rol + ' · ' + current;
+  $('chMsgs').innerHTML = ''; $('chat').hidden = false;
+  say(GUION[a.id].saludo());
+  // la primera vez que hablas con cada agente, te muestra su instructivo
+  let visto = false; try { visto = localStorage.getItem('ayuda_' + a.id) === '1'; localStorage.setItem('ayuda_' + a.id, '1'); } catch (e) {}
+  if (!visto) say(ayudaAgente(a));
+  const ch = $('chChips'); ch.innerHTML = '';
+  { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip-ayuda'; b.textContent = '❓ ¿Qué puedes hacer?';
+    b.addEventListener('click', () => { say(esc('¿Qué puedes hacer?'), 'u'); say(ayudaAgente(a)); }); ch.appendChild(b); }
+  Object.keys(GUION[a.id].opciones).forEach(q => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = q;
+    b.addEventListener('click', () => ask(q)); ch.appendChild(b);
+  });
+}
+function closeChat(){ if (chatAgent) chatAgent.npc.talking = false; chatAgent = null; $('chat').hidden = true; AGENTES.forEach(a => a.rb && a.rb.classList.remove('on')); }
+function say(html, who = 'a'){
+  const d = document.createElement('div'); d.className = 'bub ' + who; d.innerHTML = html;
+  $('chMsgs').appendChild(d); $('chMsgs').scrollTop = 1e6; return d;
+}
+function ask(q){
+  const a = chatAgent; if (!a) return;
+  say(esc(q), 'u');
+  const typing = say('<span class="dots"><i></i><i></i><i></i></span>');
+  setTimeout(() => {
+    typing.remove();
+    const r = GUION[a.id].opciones[q](txt => { if (chatAgent === a) say(txt); });
+    if (r) say(r);
+  }, 450);
+}
+$('chClose').addEventListener('click', closeChat);
+$('chMsgs').addEventListener('click', e => { const b = e.target.closest('.plink'); if (b) return openDetail(bays[+b.dataset.bay]); const a = e.target.closest('.pact'); if (a) return accionPedro(a); const q = e.target.closest('.pact-ask'); if (q) ask(q.dataset.q); });
+$('talkBtn').addEventListener('click', () => { if (nearAgent) openChat(nearAgent); });
+let nearAgent = null;
+function updateAgentsUI(cam, w, h){
+  nearAgent = null; let best = 3;
+  for (const a of AGENTES){
+    if (!a.npc) continue;
+    const p = a.npc.g.position;
+    tmp.set(p.x, 2.25, p.z).project(cam);
+    let show = tmp.z < 1 && tmp.z > -1 && Math.abs(tmp.x) < 1.05 && Math.abs(tmp.y) < 1.05;
+    if (mode === 'walk'){ const d = Math.hypot(p.x - player.x, p.z - player.z); if (d > 16) show = false; if (d < best){ best = d; nearAgent = a; } }
+    a.tag.hidden = !show;
+    if (show){ a.tag.style.transform = `translate(${(tmp.x + 1) / 2 * w}px, ${(-tmp.y + 1) / 2 * h}px) translate(-50%, -100%)`; a.tag.style.zIndex = '1500'; }
+  }
+  const tb = $('talkBtn');
+  tb.hidden = !(mode === 'walk' && nearAgent && chatAgent !== nearAgent);
+  if (!tb.hidden) tb.textContent = 'Hablar con ' + nearAgent.nombre + ' (T)';
+}
+function refreshAgentBadges(){
+  AGENTES.forEach(a => {
+    let u = false; try { u = urgente(a); } catch (e) {}
+    if (a.tag) a.tag.querySelector('.bang').hidden = !u;
+    const nE = a.id === 'laura' ? ENTRADAS_NUEVAS.filter(e => e.bodega === current).length : 0;
+    if (a.rb){ const dt = a.rb.querySelector('.dot'); dt.hidden = !u && !nE; dt.textContent = nE ? '+' + Math.min(9, nE) : '!'; a.rb.querySelector('span').textContent = a.nombre[0]; a.rb.querySelector('.rtip').textContent = a.nombre + ' · ' + a.rol; a.rb.classList.toggle('on', chatAgent === a); }
+    // aviso tipo chat cuando un agente pasa a tener algo urgente (no la primera vez que carga)
+    const k = current + '|' + a.id;
+    if (u && avisados[k] === false && !chatAgent) avisoAgente(a);
+    avisados[k] = u;
+  });
+  // al entrar a una bodega, el agente con algo urgente avisa una vez (como un mensaje nuevo)
+  if (!saludoBodega[current] && !chatAgent){
+    saludoBodega[current] = true;
+    const a = AGENTES.find(x => { try { return urgente(x); } catch (e) { return false; } });
+    if (a) setTimeout(() => { if (!chatAgent) avisoAgente(a); }, 1200);
+  }
+}
+const saludoBodega = {};
+/* ---------- todos los movimientos, con filtros ---------- */
+const MV_MAX_FILAS = 400;
+function pintarMovs(){
+  const q = $('mvQ').value.trim().toLowerCase(), tipo = $('mvTipo').value, dias = +$('mvDias').value, todas = $('mvBod').value === 'todas';
+  const desde = dias ? (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime() - (dias - 1) * 864e5; })() : 0;
+  const L = movHist.filter(e => (todas || e.bodega === current) && (!tipo || e.tipo === tipo) &&
+    (!desde || (e.hora && +e.hora >= desde)) &&
+    (!q || (e.nombre + ' ' + (e.usuario || '') + ' ' + (e.doc || '') + ' ' + e.id).toLowerCase().includes(q)));
+  const ent = L.filter(e => e.tipo === 'in').length, sal = L.length - ent;
+  $('mvSub').textContent = todas ? 'Todas las bodegas' : current;
+  $('mvSum').innerHTML = `<span><b>${L.length}</b> movimientos</span><span><b>${ent}</b> entradas</span><span><b>${sal}</b> salidas</span>` +
+    (movHist.length >= 2000 ? '<span>Se muestran los 2000 más recientes de la hoja.</span>' : '');
+  $('mvBody').innerHTML = L.slice(0, MV_MAX_FILAS).map(e => {
+    const h = e.hora && !isNaN(e.hora) ? e.hora.toLocaleString('es-CO', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+    return `<tr><td class="h">${h}</td><td><span class="chip ${e.tipo}">${e.tipo === 'out' ? 'Salida' : 'Entrada'}</span></td><td><b>${esc(e.nombre)}</b>${todas && e.bodega ? ` <small>${esc(e.bodega)}</small>` : ''}</td>
+      <td class="q">${e.tipo === 'out' ? '−' : '+'}${fmt(e.cantidad)} ${esc(e.unidad || '')}</td><td>${esc(e.usuario || '')}</td><td><small>${esc(e.doc || '')}</small></td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="hint">No hay movimientos con esos filtros.</td></tr>';
+  $('mvMas').hidden = L.length <= MV_MAX_FILAS;
+  $('mvMas').textContent = `Se ven los ${MV_MAX_FILAS} más recientes de ${L.length}. Usa la búsqueda o el periodo para ver otros.`;
+}
+$('verMovs').addEventListener('click', () => { $('movs').hidden = false; pintarMovs(); });
+$('mvClose').addEventListener('click', () => { $('movs').hidden = true; });
+['mvQ', 'mvTipo', 'mvDias', 'mvBod'].forEach(id => $(id).addEventListener(id === 'mvQ' ? 'input' : 'change', pintarMovs));
+/* ---------- barra lateral de agentes (como burbujas de chat) ---------- */
+const avisados = {};
+AGENTES.forEach(a => {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'rb'; b.style.setProperty('--c', a.css);
+  b.setAttribute('aria-label', 'Hablar con ' + a.nombre + ', ' + a.rol);
+  b.innerHTML = `<span>${a.nombre[0]}</span><b class="dot" hidden>!</b><em class="rtip">${a.nombre} · ${a.rol}</em>`;
+  b.addEventListener('click', () => { ocultarAviso(); if (chatAgent === a) closeChat(); else openChat(a); refreshAgentBadges(); });
+  $('rail').appendChild(b); a.rb = b;
+});
+let avisoT = null;
+function textoPlano(html){ const d = document.createElement('div'); d.innerHTML = html; return d.textContent.replace(/\s+/g, ' ').trim(); }
+let avisoPrioridad = 0;   // mientras se ve un aviso de entrada, los otros agentes esperan
+function avisoAgente(a, propio, segundos){
+  if (!propio && Date.now() < avisoPrioridad) return;
+  let t = propio || ''; if (!t) try { t = textoPlano(GUION[a.id].saludo()).replace(/^(Buenos días|Buenas tardes|Buenas noches)\.\s*/, ''); } catch (e) { return; }
+  if (t.length > 170) t = t.slice(0, 167).replace(/\s+\S*$/, '') + '…';
+  const el = $('rtoast'), r = a.rb.getBoundingClientRect(), st = $('stage').getBoundingClientRect();
+  el.className = 'rtoast'; el.hidden = false; el.setAttribute('role', 'status');
+  el.innerHTML = `<span class="x" aria-hidden="true">×</span><b style="color:${a.css}">${esc(a.nombre)} · ${esc(a.rol)}</b>${esc(t)}`;
+  el.style.top = Math.max(8, Math.min(r.top - st.top - 6, st.height - 120)) + 'px';
+  el.onclick = e => { ocultarAviso(); if (!e.target.closest('.x')) { openChat(a); refreshAgentBadges(); } };
+  clearTimeout(avisoT); avisoT = setTimeout(ocultarAviso, (segundos || 8) * 1000);
+}
+/* ---------- Laura avisa cuando entra mercancía (un movimiento positivo) ---------- */
+const movVistos = new Set(); let movBase = false, ENTRADAS_NUEVAS = [];
+const claveMov = e => [e.hora ? +e.hora : '', e.id, e.tipo, e.cantidad, e.doc || ''].join('|');
+function revisarEntradas(nuevos){
+  const ent = nuevos.filter(e => e.tipo === 'in');
+  if (!ent.length) return;
+  ent.forEach(e => e.vistoEn = Date.now());
+  ENTRADAS_NUEVAS = ent.concat(ENTRADAS_NUEVAS).slice(0, 50);
+  const aqui = ent.filter(e => e.bodega === current), laura = AGENTES.find(a => a.id === 'laura');
+  if (laura && laura.rb){ const d = laura.rb.querySelector('.dot'); d.hidden = false; d.textContent = '+' + Math.min(9, ENTRADAS_NUEVAS.filter(e => e.bodega === current).length); }
+  if (!aqui.length || !laura || chatAgent) return;
+  const m = e => { const p = prodPorId(e.id); return p ? p : null; };
+  let t;
+  if (aqui.length === 1){
+    const e = aqui[0], p = m(e);
+    t = `Entró mercancía: +${fmt(e.cantidad)} ${e.unidad} de ${e.nombre}` + (e.doc ? ` (doc. ${e.doc})` : '') + '.' +
+        (p ? ` Ahora hay ${fmt(p.stock)} ${p.unidad}` + (status(p) === 'ok' ? ', ya está fuera de alerta.' : status(p) === 'crit' ? ', todavía en crítico.' : ', todavía bajo.') : '') +
+        (!e.doc ? ' Falta el documento soporte.' : '');
+  } else t = `Entraron ${aqui.length} productos a ${current}: ` + aqui.slice(0, 4).map(e => `+${fmt(e.cantidad)} ${e.nombre}`).join(', ') + (aqui.length > 4 ? '…' : '.');
+  avisoAgente(laura, t, 12); avisoPrioridad = Date.now() + 12000;
+}
+function ocultarAviso(){ clearTimeout(avisoT); $('rtoast').hidden = true; }
+const treeM = M(0x44c08a), trunkM = M(0x8a6a4a);
+[[-24,-26],[-23,-12,.8],[-24,4],[-23,18,.9],[0,-28,1.1],[8,-27.5,.8],[24,-20],[26,14],[27,-10,.8],[-8,34.5,.9],[6,35,.9],[21,33]].forEach(([x,z,s=1]) => {
+  mesh(new THREE.CylinderGeometry(.15*s,.2*s,1.4*s,8), trunkM, x, .7*s, z); mesh(new THREE.SphereGeometry(1.1*s, 14, 10), treeM, x, 2*s, z); });
+
+/* ---------- racks con InstancedMesh (rápido para 100 racks) ---------- */
+const dummy = new THREE.Object3D();
+function inst(geo, mat, n){ const im = new THREE.InstancedMesh(geo, mat, n); im.castShadow = im.receiveShadow = true; scene.add(im); return im; }
+function rackSet(list){                                              // postes, vigas y bandejas de un grupo de racks
+  const posts = inst(B(.09, TOP, .09), M(0x1f5bff), list.length * 4);
+  const beams = inst(B(BW, .11, .07), M(0xf08a24), list.length * LEVELS * 2);
+  const decks = inst(B(BW - .06, .03, BD - .04), M(0xb8c2d4, { metalness:.3 }), list.length * LEVELS);
+  let pi = 0, bi = 0, di = 0;
+  for (const b of list){
+    for (const [dx, dz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){ dummy.position.set(b.x + dx * (BW/2 - .05), TOP/2, b.z + dz * (BD/2 - .05)); dummy.updateMatrix(); posts.setMatrixAt(pi++, dummy.matrix); }
+    for (const y of LEVEL_Y){
+      for (const dz of [-1, 1]){ dummy.position.set(b.x, y, b.z + dz * (BD/2 - .04)); dummy.updateMatrix(); beams.setMatrixAt(bi++, dummy.matrix); }
+      dummy.position.set(b.x, y + .05, b.z); dummy.updateMatrix(); decks.setMatrixAt(di++, dummy.matrix);
+    }
+  }
+  return [posts, beams, decks];
+}
+rackSet(bays.filter(b => !b.extra));
+const racksK = rackSet(bays.filter(b => b.extra));                    // pasillo K: solo visible en Salas
+function esSalas(){ try { return claveBodega(current) === 'sala'; } catch (e){ return true; } }   // antes de cargar datos: Salas
+function bayVisible(b){ return !b.extra || esSalas(); }
+function aplicarPasilloK(){ const on = esSalas(); racksK.forEach(m => m.visible = on); pisoK.visible = on; }
+// cajas: 18 posiciones por rack
+const BOXGEO = B(.76, .54, .47);
+const boxes = inst(BOXGEO, M(0xffffff), bays.length * CAP);
+const cur = new Float32Array(bays.length * CAP), tgt = new Float32Array(bays.length * CAP);
+const slotLocal = [];
+for (let l = 0; l < LEVELS; l++) for (let j = 0; j < SR; j++) for (let k = 0; k < SC; k++)
+  slotLocal.push(new THREE.Vector3((k - 1) * .82, LEVEL_Y[l] + .07 + .27, (j - .5) * .5));
+const tmpC = new THREE.Color();
+const PAL = { box:[0xf29a2e, 0xe88d2a, 0xf5ad48, 0xdc8526], liq:[0x3d7bff, 0x2f6cf0], roll:[0x8a94a8, 0x6f7a90], sack:[0xe7dcc2, 0xd9cba9],
+  basecama:[0xd9b27c, 0xcfa56c, 0xe3c08f], cabecero:[0x8c8f96, 0x2f3e5c, 0xb7a58f] };
+function kindOf(m){
+  const n = m.nombre || '';
+  if (/^\s*(base\s*-?\s*camas?|basecamas?|bastidor|somier)\b/i.test(n)) return 'basecama';
+  if (/^\s*(cabeceros?|espaldar)\b/i.test(n)) return 'cabecero';
+  const desc = (m.raw && (m.raw['Descripción'] || m.raw.Descripcion)) || '';
+  if (/\b(telas?|cuero|cuerinas?|lienzo|lona)\b/i.test(n + ' ' + desc) || /^\s*rollos?\b/i.test(m.unidad || '')) return 'rollo';   // telas, cuero, cuerina, lienzo o unidad "Rollo"
+  return 'box';                                                           // todo lo demás, en cajas
+}
+function palOf(k){ return PAL[k] || (typeof LAYERS !== 'undefined' && (LAYERS.find(L => L.kind === k) || {}).pal) || PAL.box; }
+function setBoxMatrix(i){
+  const b = bays[(i / CAP) | 0], p = slotLocal[i % CAP], s = cur[i];
+  dummy.position.set(b.x + p.x, p.y + (1 - s) * .6, b.z + p.z); dummy.scale.setScalar(Math.max(s, .0001)); dummy.updateMatrix();
+  boxes.setMatrixAt(i, dummy.matrix); dummy.scale.setScalar(1);
+}
+for (let i = 0; i < cur.length; i++){ setBoxMatrix(i); boxes.setColorAt(i, tmpC.setHex(0xf29a2e)); }
+function boxesFor(m){ return !m || m.stock <= 0 ? 0 : Math.max(1, Math.min(CAP, Math.round(m.stock / m.max * CAP))); }
+function setBayTarget(b, instant){
+  const n = boxesFor(b.m), kind = b.m ? kindOf(b.m) : 'box', pal = PAL.box, esp = ESPECIALES.has(kind);
+  for (const L of LAYERS) if (kind === L.kind && b.i > L.maxBay){ L.maxBay = b.i; setLayerCount(L); }
+  for (let s = 0; s < CAP; s++){
+    const i = b.i * CAP + s; tgt[i] = !esp && s < n ? 1 : 0;
+    boxes.setColorAt(i, tmpC.setHex(pal[(s + b.i) % pal.length]));
+    if (instant){ cur[i] = tgt[i]; setBoxMatrix(i); }
+    for (const L of LAYERS){
+      L.tgt[i] = kind === L.kind && s < n ? 1 : 0;
+      L.mesh.setColorAt(i, tmpC.setHex(L.pal[(L.porPieza ? s + b.i : b.i) % L.pal.length]));   // cabeceros: una tela por rack
+      if (instant){ L.cur[i] = L.tgt[i]; setLayerMatrix(L, i); }
+    }
+  }
+  boxes.instanceColor.needsUpdate = true; if (instant) boxes.instanceMatrix.needsUpdate = true;
+  for (const L of LAYERS){ L.mesh.instanceColor.needsUpdate = true; if (instant){ L.mesh.instanceMatrix.needsUpdate = true; if (L.extra) L.extra.instanceMatrix.needsUpdate = true; } }
+}
+
+/* =====================================================================
+   PIEZAS ESPECIALES (bodega Basecamas y cabeceros)
+   · Base cama: bastidor de pino sin patas — 2 largueros, 2 cabeceras, larguero central
+     y 8 tablillas encima (1,90 × 0,95 m). Se guardan planas, 6 apiladas por nivel.
+   · Cabecero: panel tapizado capitoneado (1,10 × 0,62 m) con 2 postes de madera.
+     Se guardan de pie: 2 de frente × 3 de fondo por nivel.
+   Un producto se dibuja así si su nombre empieza por "Basecama/Base cama" o "Cabecero".
+   ===================================================================== */
+function mergeBoxes(parts){
+  const pos = [], nor = [], uv = [];
+  for (const [w, h, d, x, y, z] of parts){
+    const g = new THREE.BoxGeometry(w, h, d).toNonIndexed(); g.translate(x, y, z);
+    pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); uv.push(...g.attributes.uv.array);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return geo;
+}
+const BASE_L = 1.9, BASE_W = .95, BASE_H = .11;
+const BASEGEO = mergeBoxes([
+  [BASE_L, BASE_H, .035, 0, BASE_H / 2,  BASE_W / 2 - .0175],               // larguero lateral
+  [BASE_L, BASE_H, .035, 0, BASE_H / 2, -BASE_W / 2 + .0175],               // larguero lateral
+  [.035, BASE_H, BASE_W - .07,  BASE_L / 2 - .0175, BASE_H / 2, 0],         // cabecera del marco
+  [.035, BASE_H, BASE_W - .07, -BASE_L / 2 + .0175, BASE_H / 2, 0],         // pie del marco
+  [BASE_L - .07, BASE_H, .035, 0, BASE_H / 2, 0]                            // larguero central
+].concat(Array.from({ length: 8 }, (_, k) => [.07, .016, BASE_W, -BASE_L / 2 + .1 + k * (BASE_L - .2) / 7, BASE_H + .008, 0])));   // tablillas
+const CABGEO = new THREE.BoxGeometry(1.1, .62, .08).translate(0, .43, 0);                                   // panel tapizado
+const POSTGEO = mergeBoxes([[.06, .52, .06, -.47, .26, -.02], [.06, .52, .06, .47, .26, -.02]]);               // postes de madera
+const tufted = (function(){                                                 // textura capitoné: rombos con botones
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 128, 128); g.strokeStyle = 'rgba(0,0,0,.22)'; g.lineWidth = 2;
+  for (let k = -128; k <= 256; k += 32){ g.beginPath(); g.moveTo(k, 0); g.lineTo(k + 128, 128); g.stroke(); g.beginPath(); g.moveTo(k, 128); g.lineTo(k + 128, 0); g.stroke(); }
+  g.fillStyle = 'rgba(0,0,0,.4)'; for (let x = 0; x <= 128; x += 32) for (let y = 0; y <= 128; y += 32){ g.beginPath(); g.arc(x + ((y / 32) % 2 ? 16 : 0), y, 3, 0, 7); g.fill(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 1.2); return t;
+})();
+const slotsBase = [], slotsCab = [];
+for (let s = 0; s < CAP; s++){
+  const l = Math.floor(s / 6), k = s % 6;
+  slotsBase.push(new THREE.Vector3(0, LEVEL_Y[l] + .068 + k * .145, 0));
+  slotsCab.push(new THREE.Vector3(k % 2 ? .63 : -.63, LEVEL_Y[l] + .068, (Math.floor(k / 2) - 1) * .32));
+}
+const NI = bays.length * CAP;
+/* ---------- figuras por tipo de materia prima (Salas, Colchonera, Espumas) ---------- */
+function mergeGeos(list){                                                  // [geometry, x, y, z]
+  const pos = [], nor = [], uv = [];
+  for (const [g0, x, y, z] of list){ const g = (g0.index ? g0.toNonIndexed() : g0.clone()); g.translate(x, y, z);
+    pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); uv.push(...g.attributes.uv.array); }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return geo;
+}
+function grid6(xs, zs, dy = 0){                                            // 6 posiciones por nivel × 3 niveles = 18
+  const out = [];
+  for (let l = 0; l < LEVELS; l++) for (const z of zs) for (const x of xs) out.push(new THREE.Vector3(x, LEVEL_Y[l] + .068 + dy, z));
+  return out.slice(0, CAP);
+}
+function stack6(xs, h){                                                    // 2 columnas × 3 de alto por nivel
+  const out = [];
+  for (let l = 0; l < LEVELS; l++) for (let k = 0; k < 3; k++) for (const x of xs) out.push(new THREE.Vector3(x, LEVEL_Y[l] + .068 + k * h, 0));
+  return out;
+}
+function rollPile(){                                                     // rollos agrupados en pila: 2 abajo + 1 encima, en 2 columnas por nivel
+  const out = [];
+  for (let l = 0; l < LEVELS; l++){
+    const y = LEVEL_Y[l] + .068;
+    for (const x of [-.63, .63]) for (const z of [-.125, .125]) out.push(new THREE.Vector3(x, y, z));
+    for (const x of [-.63, .63]) out.push(new THREE.Vector3(x, y + .208, 0));
+  }
+  return out;
+}
+const coilTex = (function(){                                               // espiral de resorte
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64; const g = c.getContext('2d');
+  g.clearRect(0, 0, 64, 64); g.strokeStyle = '#ffffff'; g.lineWidth = 7;
+  for (let y = -64; y < 128; y += 16){ g.beginPath(); g.moveTo(0, y); g.lineTo(64, y + 16); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 2); return t;
+})();
+const GEO = {
+  espuma: new THREE.BoxGeometry(1.15, .27, 1.0).translate(0, .135, 0),
+  rollo:  new THREE.CylinderGeometry(.12, .12, 1.15, 16).rotateZ(Math.PI / 2).translate(0, .12, 0),
+  resorte: mergeGeos([-.12, 0, .12].flatMap(x => [-.12, 0, .12].map(z => [new THREE.CylinderGeometry(.05, .05, .17, 10, 1, true), x, .085, z]))),
+  pata:   mergeGeos([[new THREE.BoxGeometry(.34, .03, .24), 0, .015, 0]].concat([-.1, 0, .1].flatMap(x => [-.05, .05].map(z => [new THREE.CylinderGeometry(.035, .022, .22, 10), x, .14, z])))),
+  galon:  mergeGeos([[new THREE.CylinderGeometry(.13, .13, .3, 14), 0, .15, 0], [new THREE.CylinderGeometry(.045, .045, .06, 10), .05, .33, 0], [new THREE.BoxGeometry(.03, .08, .12), -.07, .31, 0]]),
+  hilo:   mergeGeos([-.065, .065].flatMap(x => [-.065, .065].map(z => [new THREE.ConeGeometry(.055, .21, 12), x, .105, z]))),
+  bulto:  new THREE.SphereGeometry(.26, 12, 9).scale(1.1, .62, .82).translate(0, .16, 0)
+};
+const DEFS = [
+  { kind:'basecama', geo: BASEGEO, mat: M(0xffffff, { roughness:.85 }), slots: slotsBase, pal:[0xd9b27c, 0xcfa56c, 0xe3c08f, 0xc99e66], porPieza:true },
+  { kind:'cabecero', geo: CABGEO, mat: new THREE.MeshStandardMaterial({ color:0xffffff, map:tufted, roughness:.95 }), extra: POSTGEO, extraMat: M(0xb07a43), slots: slotsCab,
+    pal:[0x8c8f96, 0x2f3e5c, 0xb7a58f, 0x5b3a29, 0x3f6b5a, 0x7b2d2d, 0xd8c27a] },
+  { kind:'espuma',  geo: GEO.espuma,  mat: M(0xffffff, { roughness:1 }),  slots: stack6([-.63, .63], .29), pal:[0xf3e27a, 0x9cc8f0, 0xf4a7b9, 0xf2f2ee, 0xb9e3a0, 0xf5c38a] },
+  { kind:'rollo',   geo: GEO.rollo,   mat: M(0xffffff, { roughness:.9 }), slots: rollPile(), pal:[0x151515, 0x5b3a29, 0x2f3e5c, 0xb7b1a6, 0x8c2f39, 0x3f6b5a, 0xd8c27a, 0xeeeeea], porPieza:true },
+  { kind:'resorte', geo: GEO.resorte, mat: new THREE.MeshStandardMaterial({ color:0xffffff, map:coilTex, transparent:true, alphaTest:.3, side:THREE.DoubleSide, metalness:.6, roughness:.35 }), slots: grid6([-.82, 0, .82], [-.25, .25]), pal:[0xc3c9d3, 0xaab2bf] },
+  { kind:'pata',    geo: GEO.pata,    mat: M(0xffffff, { roughness:.8 }), slots: grid6([-.82, 0, .82], [-.25, .25]), pal:[0xb07a43, 0x8a5a2b, 0xc99e66, 0x1d1d1d] },
+  { kind:'galon',   geo: GEO.galon,   mat: M(0xffffff, { roughness:.45 }), slots: grid6([-.82, 0, .82], [-.25, .25]), pal:[0x3d7bff, 0xf2c230, 0xf4f4f4, 0xe5383b, 0x14a06b] },
+  { kind:'hilo',    geo: GEO.hilo,    mat: M(0xffffff, { roughness:.7 }), slots: grid6([-.82, 0, .82], [-.25, .25]), pal:[0x1c1c1c, 0xf2f2f2, 0x5b3a29, 0x2f3e5c, 0x8c2f39, 0xd8c27a], porPieza:true },
+  { kind:'bulto',   geo: GEO.bulto,   mat: M(0xffffff, { roughness:1 }),  slots: grid6([-.82, 0, .82], [-.25, .25]), pal:[0xe7dcc2, 0xd9cba9, 0xf2f0ea] }
+];
+const LAYERS = DEFS.map(d => ({ kind:d.kind, mesh: inst(d.geo, d.mat, NI), extra: d.extra ? inst(d.extra, d.extraMat, NI) : null, slots:d.slots, pal:d.pal, porPieza:!!d.porPieza, maxBay:-1 }));
+function setLayerMatrix(L, i){
+  const b = bays[(i / CAP) | 0], p = L.slots[i % CAP], sc = L.cur[i];
+  dummy.position.set(b.x + p.x, p.y + (1 - sc) * .6, b.z + p.z); dummy.scale.setScalar(Math.max(sc, .0001)); dummy.updateMatrix();
+  L.mesh.setMatrixAt(i, dummy.matrix); if (L.extra) L.extra.setMatrixAt(i, dummy.matrix); dummy.scale.setScalar(1);
+}
+function setLayerCount(L){ const n = (L.maxBay + 1) * CAP; L.mesh.count = n; if (L.extra) L.extra.count = n; }   // solo se dibujan los racks que usan esta figura
+LAYERS.forEach(L => {
+  L.cur = new Float32Array(NI); L.tgt = new Float32Array(NI);
+  for (let i = 0; i < NI; i++){ setLayerMatrix(L, i); L.mesh.setColorAt(i, tmpC.setHex(0xffffff)); }
+  setLayerCount(L);
+});
+const ESPECIALES = new Set(LAYERS.map(L => L.kind));
+
+// marcos de alerta, balizas y cajas de clic
+const ringGeo = new THREE.RingGeometry(.86, 1, 4, 1, Math.PI/4);
+const matCrit = new THREE.MeshBasicMaterial({ color:0xe5383b, transparent:true, side:THREE.DoubleSide, depthWrite:false });
+const matLow  = new THREE.MeshBasicMaterial({ color:0xe8a300, transparent:true, side:THREE.DoubleSide, depthWrite:false });
+const matBul  = new THREE.MeshBasicMaterial({ color:0xe5383b });
+const matHalo = new THREE.MeshBasicMaterial({ color:0xe5383b, transparent:true, opacity:.3, depthWrite:false });
+const hitGeo = B(BW, TOP, BD), bulbGeo = new THREE.SphereGeometry(.18, 12, 10), haloGeo = new THREE.SphereGeometry(.42, 12, 10);
+const hits = [];
+for (const b of bays){
+  const ring = new THREE.Mesh(ringGeo, matLow); ring.rotation.x = -Math.PI/2; ring.position.set(b.x, .03, b.z);
+  ring.scale.set((BW/2 + .45) / .707, (BD/2 + .45) / .707, 1); ring.visible = false; scene.add(ring); b.ring = ring;
+  const bc = new THREE.Group(); bc.add(new THREE.Mesh(bulbGeo, matBul)); bc.add(new THREE.Mesh(haloGeo, matHalo));
+  bc.position.set(b.x, TOP + .35, b.z); bc.visible = false; scene.add(bc); b.beacon = bc;
+  const h = new THREE.Mesh(hitGeo, matBul); h.position.set(b.x, TOP/2, b.z); h.visible = false; h.userData.bay = b; scene.add(h); hits.push(h);
+  b.anchor = new THREE.Vector3(b.x, TOP + .9, b.z); b.anchorWalk = new THREE.Vector3(b.x, 2.75, b.z + BD/2);
+}
+const selRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color:0x1f5bff, transparent:true, side:THREE.DoubleSide, depthWrite:false }));
+selRing.rotation.x = -Math.PI/2; selRing.scale.set((BW/2 + .7) / .707, (BD/2 + .7) / .707, 1); selRing.visible = false; scene.add(selRing);
+
+/* ---------- etiquetas ---------- */
+const labelsEl = $('labels');
+function tagFor(b){
+  if (b.tag) return b.tag;
+  const t = document.createElement('div'); t.className = 'tag';
+  t.innerHTML = '<b></b><div class="row"><span class="z"></span><span class="q"></span></div><div class="bar"><span></span></div>';
+  t.addEventListener('click', () => openDetail(b)); labelsEl.appendChild(t); b.tag = t; return t;
+}
+function updateBayVisual(b){
+  const m = b.m; b.state = m ? status(m) : 'empty';
+  b.ring.visible = b.state === 'crit' || b.state === 'low'; b.ring.material = b.state === 'crit' ? matCrit : matLow;
+  b.beacon.visible = b.state === 'crit';
+  if (!m){ if (b.tag) b.tag.hidden = true; return; }
+  const t = tagFor(b);
+  t.className = 'tag ' + b.state + (selected === b ? ' sel' : '');
+  t.querySelector('b').textContent = m.nombre; t.querySelector('.z').textContent = b.code;
+  t.querySelector('.q').textContent = fmt(m.stock) + ' ' + m.unidad;
+  t.querySelector('.bar>span').style.width = Math.min(100, m.stock / m.max * 100).toFixed(1) + '%';
+}
+/* Etiquetas: por defecto solo se ve la del producto que un operario o agente está revisando en ese momento.
+   Los botones agregan las de críticos, las de bajos o todas. */
+let showAll = false, showCrit = false, showLow = false;
+[['tgLabels', v => showAll = v], ['tgCrit', v => showCrit = v], ['tgLow', v => showLow = v]].forEach(([id, set]) =>
+  $(id).addEventListener('click', e => { const on = e.currentTarget.getAttribute('aria-pressed') !== 'true'; e.currentTarget.setAttribute('aria-pressed', on); set(on); }));
+const floaters = [];
+function floatDelta(b, delta){
+  const d = document.createElement('div'); d.className = 'delta ' + (delta < 0 ? 'out' : 'in');
+  d.textContent = (delta < 0 ? '−' : '+') + fmt(Math.abs(delta)) + ' ' + b.m.unidad;
+  labelsEl.appendChild(d); const f = { d, b }; floaters.push(f);
+  setTimeout(() => { d.remove(); floaters.splice(floaters.indexOf(f), 1); }, 1800);
+}
+
+/* =====================================================================
+   ZONA DE PROVEEDORES (frente a la bodega, al otro lado del patio)
+   Una casita por proveedor. Laura se queda en la entrada haciendo el cruce:
+   lo que había que pedir (pedido sugerido) vs. lo solicitado en "solicitudes de insumos".
+   ===================================================================== */
+const PX0 = XMAX + 15;
+let PX1 = XMAX + 37, PZ = 21;                                          // se recalculan según la cantidad de proveedores
+let PROVEEDORES = [], SOLICITUDES = [], SOL_ERR = '';
+const provZone = new THREE.Group(); scene.add(provZone);
+const zoneBase = new THREE.Group(); scene.add(zoneBase);
+(function(){                                                           // arco de entrada "PROVEEDORES" (fijo)
+  for (const z of [-3.2, 3.2]) slab(PX0 - .2, 0, z - .2, PX0 + .2, 3.6, z + .2, M(0x1f5bff));
+  slab(PX0 - .15, 3.2, -3.4, PX0 + .15, 3.9, 3.4, M(0x1f5bff));
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 64; const g = cv.getContext('2d');
+  g.fillStyle = '#1f5bff'; g.fillRect(0, 0, 512, 64); g.fillStyle = '#fff'; g.font = '800 38px Archivo, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('PROVEEDORES', 256, 34);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(6.4, .7), new THREE.MeshBasicMaterial({ map:new THREE.CanvasTexture(cv) }));
+  sign.rotation.y = -Math.PI / 2; sign.position.set(PX0 - .17, 3.55, 0); scene.add(sign);
+})();
+function buildZone(){
+  while (zoneBase.children.length) zoneBase.remove(zoneBase.children[0]);
+  const gnd = mesh(B(PX1 - XMAX - T, .05, PZ * 2), M(0xdfe6f0), (XMAX + T + PX1) / 2, .025, 0, zoneBase); gnd.castShadow = false;
+  const fence = M(0x9aa9c4);
+  for (const z of [-PZ, PZ]) slab(PX0, 0, z - .06, PX1, .9, z + .06, fence, zoneBase);
+  slab(PX1 - .06, 0, -PZ, PX1 + .06, .9, PZ, fence, zoneBase);
+  slab(PX0 - .06, 0, -PZ, PX0 + .06, .9, -3, fence, zoneBase); slab(PX0 - .06, 0, 3, PX0 + .06, .9, PZ, fence, zoneBase);
+}
+buildZone();
+
+/* ---------- fábricas (compactas, para hasta ~100 proveedores) ---------- */
+const FW = 2.6, FD = 3.0, FH = 1.8;                                    // frente, fondo y alto de cada fábrica
+const FS = .75;                                                        // escala de las fábricas (25 % más pequeñas)
+const SX = 3.3, SZ = 3.4;                                              // separación de la cuadrícula
+const HOUSE_COL = [0xf29a2e, 0x3f8f6b, 0xc0504d, 0x6b5fa8, 0x2f7fb8, 0xb0884a, 0x5d6b85, 0xd06b9a];
+const FAB = (function(){
+  const sh = new THREE.Shape(), t = FD / 3, h = .55;                   // techo en dientes de sierra en una sola pieza
+  sh.moveTo(0, 0); sh.lineTo(0, h); sh.lineTo(t, 0); sh.lineTo(t, h); sh.lineTo(2 * t, 0); sh.lineTo(2 * t, h); sh.lineTo(3 * t, 0); sh.lineTo(0, 0);
+  const roof = new THREE.ExtrudeGeometry(sh, { depth: FW, bevelEnabled: false });
+  return { body: B(FW, FH, FD), roof, plinth: B(FW + .04, .18, FD + .04), door: B(.06, 1.1, 1.2), chim: new THREE.CylinderGeometry(.13, .17, 2.3, 10),
+    band: new THREE.CylinderGeometry(.15, .15, .22, 10), light: new THREE.SphereGeometry(.24, 12, 10), halo: new THREE.SphereGeometry(.45, 12, 10), puff: new THREE.SphereGeometry(.3, 8, 6),
+    wall: M(0xe9ecf1), steel: M(0x5d6b85, { metalness:.4, roughness:.5 }), chimM: M(0xd9dde5), red: M(0xe5383b),
+    accents: HOUSE_COL.map(c => M(c)),
+    st: { falta: new THREE.MeshBasicMaterial({ color:0xe5383b }), camino: new THREE.MeshBasicMaterial({ color:0x1f5bff }), ok: new THREE.MeshBasicMaterial({ color:0x14a06b }) },
+    haloM: new THREE.MeshBasicMaterial({ color:0xe5383b, transparent:true, opacity:.25, depthWrite:false }) };
+})();
+const houses = [], smoke = [];
+function stepSmoke(dt){
+  for (const p of smoke){
+    if (!p.h.puffing){ p.m.visible = false; continue; }
+    p.m.visible = true; p.t += dt / 2.8; if (p.t > 1) p.t -= 1;
+    p.m.position.set(p.x + p.t * (p.big ? 1.5 : .5), p.y + p.t * (p.big ? 5 : 2), p.z + Math.sin(p.t * 6 + p.ph) * .15);
+    p.m.scale.setScalar((.4 + p.t * 1.2) * (p.big ? 2.2 : 1)); p.m.material.opacity = .45 * (1 - p.t);
+  }
+  const k = (Math.sin(clock.elapsedTime * 4) + 1) / 2; FAB.haloM.opacity = .15 + .3 * k;
+  for (const h of houses) if (h.halo.visible) h.halo.scale.setScalar(1 + k * .6);
+}
+// Una sola fábrica grande que representa a todos los proveedores (sin nombres); Laura hace el cruce
+const BIG = 3.2;                                                     // escala de la fábrica
+function buildHouses(){
+  houses.forEach(h => { provZone.remove(h.g); h.tag.remove(); }); houses.length = 0;
+  smoke.forEach(p => provZone.remove(p.m)); smoke.length = 0;
+  PX1 = PX0 + 17; PZ = 11; buildZone();
+  const x = PX0 + 9.5, z = 0, g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(BIG);
+  mesh(FAB.body, FAB.wall, 0, FH / 2, 0, g);
+  mesh(FAB.plinth, FAB.accents[4], 0, .09, 0, g);
+  const roof = mesh(FAB.roof, FAB.steel, 0, 0, 0, g); roof.rotation.y = Math.PI / 2; roof.position.set(-FW / 2, FH, FD / 2);
+  mesh(FAB.door, FAB.steel, -FW / 2 - .02, .55, 0, g);                                    // portón hacia la bodega
+  mesh(FAB.chim, FAB.chimM, .8, 1.15, -.9, g); mesh(FAB.band, FAB.red, .8, 2.1, -.9, g);
+  const light = mesh(FAB.light, FAB.st.ok, -.6, FH + .75, .7, g); light.castShadow = false;
+  const halo = new THREE.Mesh(FAB.halo, FAB.haloM); halo.position.copy(light.position); halo.visible = false; g.add(halo);
+  const hit = new THREE.Mesh(B(FW, FH + 1.2, FD), new THREE.MeshBasicMaterial()); hit.position.y = (FH + 1.2) / 2; hit.visible = false; g.add(hit);
+  provZone.add(g);
+  const tag = document.createElement('button'); tag.type = 'button'; tag.className = 'ptag pbig'; $('labels').appendChild(tag);
+  const h = { name:'Proveedores', g, hit, tag, light, halo, x, z, s:BIG, estado:'ok', puffing:false }; hit.userData.house = h;
+  tag.addEventListener('click', abrirCruce);
+  houses.push(h);
+  for (let k = 0; k < 4; k++){
+    const sm = new THREE.Mesh(FAB.puff, new THREE.MeshBasicMaterial({ color:0xcfd5df, transparent:true, opacity:.4, depthWrite:false })); sm.visible = false; sm.scale.setScalar(2);
+    provZone.add(sm); smoke.push({ m:sm, h, x: x + .8 * BIG, y: 2.4 * BIG, z: z - .9 * BIG, t: k / 4, ph: k, big:true });
+  }
+}
+function abrirCruce(){ const a = AGENTES.find(x => x.id === 'laura'); openChat(a); ask('Cruce de hoy'); }
+
+/* ---------- cruce de cuentas (todas las bodegas) ---------- */
+const keyId = v => String(v).trim().replace(/^0+(?=\d)/, '');
+function prodDeSolicitud(s){
+  const k = keyId(s.producto);
+  for (const p of prods.values()) if (keyId(p.m.id) === k) return p.m;
+  const n = norm(s.producto); for (const p of prods.values()) if (norm(p.m.nombre) === n) return p.m;
+  return null;
+}
+function esHoy(f){ const d = new Date(f); return !isNaN(d) && d.toDateString() === new Date().toDateString(); }
+function cruce(){
+  const items = [...prods.values()].map(p => p.m).filter(m => m.bodega === current).map(m => {
+    const st = status(m), dMin = m.consumo > 0 ? (m.stock - m.min) / m.consumo : null;
+    const dPed = m.stock <= m.min ? 0 : dMin === null ? null : dMin - (m.lead || 0);
+    const pq = Math.max(0, Math.ceil(objetivo(m) - m.stock + m.consumo * (m.lead || 0)));
+    return { m, st, dPed, pq, debiaHoy: st === 'crit' || (dPed !== null && dPed <= 0), solPend: 0, solHoy: 0, sols: [] };
+  });
+  const byId = new Map(items.map(x => [x.m.id, x])), sinProducto = [];
+  for (const s of SOLICITUDES){
+    const m = prodDeSolicitud(s); if (!m){ if (current === BODEGAS[0]) sinProducto.push(s); continue; }
+    const x = byId.get(m.id); if (!x) continue;   // solicitud de otra bodega
+    x.sols.push(s);
+    if (!s.entregado) x.solPend += s.cant;
+    if (esHoy(s.fecha)) x.solHoy += s.cant;
+  }
+  const debia = items.filter(x => x.debiaHoy && x.pq > 0);
+  const falta = debia.filter(x => x.solPend < x.pq).map(x => Object.assign(x, { falta: x.pq - x.solPend }));
+  const cubierto = debia.filter(x => x.solPend >= x.pq);
+  const sinNecesidad = items.filter(x => x.solPend > 0 && x.st === 'ok' && !(x.dPed !== null && x.dPed <= 7));
+  const pendientes = SOLICITUDES.filter(s => !s.entregado);
+  return { items, debia, falta, cubierto, sinNecesidad, pendientes, sinProducto };
+}
+const provDe = m => (m.raw && (m.raw.Proveedor || m.raw.proveedor)) || 'sin proveedor';
+function linkM(m){ const b = bays.find(x => x.m && x.m.id === m.id); return b ? link(b) : `<b>${esc(m.nombre)}</b> <small>(${esc(m.bodega)})</small>`; }
+function updateHouses(){
+  const c = cruce();
+  houses.forEach(h => {
+    const f = c.falta.length, p = c.pendientes.length;
+    h.estado = f ? 'falta' : p ? 'camino' : 'ok';
+    h.light.material = FAB.st[h.estado]; h.halo.visible = h.estado === 'falta'; h.puffing = h.estado === 'camino';
+    h.tag.className = 'ptag pbig ' + h.estado;
+    h.tag.innerHTML = `<b>Proveedores</b>` + (f ? ` <span>faltan ${f} por pedir</span>` : '') + (p ? ` <span>${p} en camino</span>` : '') + (!f && !p ? ' <span>al día</span>' : '') + ' <small>Clic para ver el cruce de Laura</small>';
+  });
+}
+
+/* ---------- Laura en la entrada: guion de cruce ---------- */
+const lauraBase = GUION.laura.opciones;
+GUION.laura.saludo = function(){
+  if (SOL_ERR) return `${H()}. <b style="color:var(--crit)">No pude leer la hoja de compras.</b> ${esc(SOL_ERR)}`;
+  const c = cruce();
+  if (!c.debia.length && !c.pendientes.length) return `${H()}. Estoy en la entrada de proveedores. Hoy no había nada que pedir y no hay solicitudes pendientes.`;
+  let t = `${H()}. Hice el cruce de hoy: había que pedir <b>${c.debia.length} productos</b>; ya están solicitados ${c.cubierto.length} y <b>faltan ${c.falta.length} por pedir</b>.`;
+  if (c.falta.length) t += ' Los más urgentes: ' + c.falta.slice(0, 3).map(x => linkM(x.m)).join(', ') + '.';
+  if (c.pendientes.length) t += ` Hay <b>${c.pendientes.length} solicitudes</b> esperando entrega.`;
+  if (!SOLICITUDES.length) t += ' Todavía no hay registros en "solicitudes de insumos".';
+  return t;
+};
+GUION.laura.opciones = {
+  'Auditoría de compras'(reply){
+    server('auditoriaCompras', [current], j => {
+      const r = typeof j === 'string' ? JSON.parse(j) : j;
+      if (r.solError) return reply(`<b style="color:var(--crit)">No pude leer la hoja de compras.</b> ${esc(r.solError)}`);
+      const c = r.cuenta || {}, tot = r.filas.length;
+      if (!tot) return reply(`No hay solicitudes de compra pendientes de entrega para ${esc(r.bodega)}: todo lo pedido ya tiene evidencia o firma de entrega.`);
+      const col = { 'No hace falta':'var(--crit)', 'Excede':'#c77d00', 'Revisar unidad':'#7b3fe4', 'Sin cruce':'var(--muted)', 'Justificada':'var(--ok)' };
+      const fila = o => `<b style="color:${col[o.estado]}">${esc(o.estado)}</b> · ${esc(o.producto)}: pidieron <b>${fmt(o.pedido)} ${esc(o.unidad || '')}</b>` +
+        (o.fecha ? ` el ${fechaTxt(new Date(o.fecha))}` : '') + `<br><small>${esc(o.porque)}</small>`;
+      const malas = r.filas.filter(o => o.estado === 'No hace falta' || o.estado === 'Excede');
+      reply(`Revisé las <b>${tot} solicitudes pendientes de entrega</b> (sin evidencia ni firma) de ${esc(r.bodega)} contra el stock de hoy y lo que ya viene pedido:` +
+        lista([`<b style="color:var(--crit)">Ya no hacen falta: ${c['No hace falta'] || 0}</b>`, `<b style="color:#c77d00">Exceden el máximo: ${c['Excede'] || 0}</b>`,
+               `<b style="color:#7b3fe4">Unidad distinta, revisar: ${c['Revisar unidad'] || 0}</b>`, `<b style="color:var(--ok)">Justificadas: ${c['Justificada'] || 0}</b>`, `Sin cruce con PEIM: ${c['Sin cruce'] || 0}`]) +
+        (malas.length ? 'Para revisar antes de que lleguen:' + lista(malas.slice(0, 12).map(fila)) + (malas.length > 12 ? `<small>… y ${malas.length - 12} más en el informe.</small>` : '') : 'Las compras pendientes con cruce están justificadas.') +
+        btn('Envíame el informe completo', `data-fn="enviarAuditoriaCompras" data-arg="${esc(current)}"`));
+    }, e => reply(esc(e)));
+    return 'Reviso las compras que todavía no han llegado contra el stock de hoy…';
+  },
+  '¿Qué ha entrado?'(){
+    const L = movHist.filter(e => e.tipo === 'in' && e.bodega === current).slice(0, 15);
+    const lD = AGENTES.find(a => a.id === 'laura'); if (lD && lD.rb){ ENTRADAS_NUEVAS = ENTRADAS_NUEVAS.filter(e => e.bodega !== current); refreshAgentBadges(); }
+    return !L.length ? `No hay entradas registradas en ${esc(current)}.` : `Últimas entradas de mercancía en ${esc(current)}:` + lista(L.map(e => { const p = prodPorId(e.id);
+      return `${e.hora && !isNaN(e.hora) ? fechaTxt(e.hora) + ' ' + horaTxt(e.hora) + ' · ' : ''}${p ? linkM(p) : '<b>' + esc(e.nombre) + '</b>'} <b>+${fmt(e.cantidad)} ${esc(e.unidad)}</b>` +
+        (e.doc ? ` · doc. ${esc(e.doc)}` : ' · <span style="color:var(--crit)">sin documento</span>') + (e.usuario ? ` · ${esc(e.usuario)}` : ''); }));
+  },
+  'Cruce de hoy'(){
+    const c = cruce();
+    return `<b>Cruce de cuentas</b>` + lista([
+      `Había que pedir hoy: <b>${c.debia.length}</b> productos`,
+      `Ya solicitados (cubren lo sugerido): <b>${c.cubierto.length}</b>`,
+      `<b style="color:var(--crit)">Falta por pedir: ${c.falta.length}</b>`,
+      `Solicitudes pendientes de entrega: <b>${c.pendientes.length}</b>`,
+      `Solicitudes sin necesidad aparente: <b>${c.sinNecesidad.length}</b>`
+    ].concat(c.sinProducto.length ? [`Solicitudes con un producto que no encuentro en Productos: <b>${c.sinProducto.length}</b>`] : []));
+  },
+  'Falta por pedir'(){
+    const f = cruce().falta;
+    return !f.length ? 'No falta nada: todo lo que había que pedir hoy ya está solicitado.' : 'Falta por pedir:' + lista(f.slice(0, 20).map(x => `${linkM(x.m)}: <b>${fmt(x.falta)} ${esc(x.m.unidad)}</b>` + (x.solPend ? ` (sugerido ${fmt(x.pq)}, ya pedidos ${fmt(x.solPend)})` : '') + ` · ${esc(provDe(x.m))}`));
+  },
+  'Pendientes de entrega'(){
+    const p = cruce().pendientes;
+    return !p.length ? 'No hay solicitudes pendientes de entrega.' : 'Esperando entrega:' + lista(p.slice(0, 20).map(s => { const m = prodDeSolicitud(s);
+      return `${m ? linkM(m) : esc(s.producto)}: ${fmt(s.cant)} ${esc(s.unidad || (m && m.unidad) || '')} · ${esc(s.proveedor || '—')}` + (s.fecha ? ` · pedido el ${fechaTxt(new Date(s.fecha))}` : '') + (s.area ? ` · ${esc(s.area)}` : ''); }));
+  },
+  'Pedidos sin necesidad'(){
+    const s = cruce().sinNecesidad;
+    return !s.length ? 'Ninguna solicitud pendiente parece innecesaria.' : 'Estos productos tienen stock normal y aun así hay solicitudes pendientes. Revisa si de verdad se necesitan:' + lista(s.map(x => `${linkM(x.m)}: stock ${fmt(x.m.stock)} ${esc(x.m.unidad)}, solicitado ${fmt(x.solPend)}`));
+  },
+  'Pedidos por proveedor': lauraBase['Pedidos por proveedor'],
+  'Envíame las órdenes por correo': lauraBase['Envíame las órdenes por correo']
+};
+function cruceProveedor(name){
+  const c = cruce(), f = c.falta.filter(x => provDe(x.m) === name), p = c.pendientes.filter(s => s.proveedor === name);
+  let t = `<b>${esc(name)}</b>: `;
+  if (!f.length && !p.length) return t + 'al día. No falta nada por pedirle ni hay entregas pendientes.';
+  if (f.length) t += 'falta por pedirle:' + lista(f.map(x => `${linkM(x.m)}: <b>${fmt(x.falta)} ${esc(x.m.unidad)}</b>`));
+  if (p.length) t += 'esperando entrega:' + lista(p.map(s => { const m = prodDeSolicitud(s); return `${m ? linkM(m) : esc(s.producto)}: ${fmt(s.cant)} ${esc(s.unidad || '')}` + (s.fecha ? ` · desde ${fechaTxt(new Date(s.fecha))}` : ''); }));
+  return t;
+}
+function askLauraProveedor(name){
+  const a = AGENTES.find(x => x.id === 'laura'); openChat(a);
+  say(esc('¿Cómo vamos con ' + name + '?'), 'u'); setTimeout(() => say(cruceProveedor(name)), 350);
+}
+// Laura deja de recorrer los racks: se queda en la entrada de proveedores
+// Laura va y viene entre la puerta de la bodega (adentro) y la entrada de proveedores; en cada punto revisa su tabla
+const LAURA_PTS = [new THREE.Vector3(XMAX - 1.3, 0, 2.2), new THREE.Vector3(PX0 + 1.3, 0, 2.2)];
+function placeLaura(){ const a = AGENTES.find(x => x.id === 'laura'); if (!a || !a.npc) return; const n = a.npc;
+  n.patrol = { pts: LAURA_PTS, i: 1, face: [-Math.PI / 2, Math.PI / 2] };            // en la bodega mira hacia adentro; en proveedores, hacia las fábricas
+  n.g.position.copy(LAURA_PTS[1]); n.g.rotation.y = Math.PI / 2; n.state = 'check'; n.t = 4; n.clip.visible = true; n.speed = 1.5; }
+placeLaura(); lauraLista = true;
+
+/* =====================================================================
+   VISTAS: general (ortográfica) y recorrido (primera persona)
+   ===================================================================== */
+let mode = 'macro';
+const player = { x: XMAX - 1.5, z: 0, yaw: Math.PI/2, pitch: -.05 };
+const keys = {};
+function setMode(m){
+  mode = m; app.classList.toggle('walk', m === 'walk'); app.classList.toggle('macro', m === 'macro');
+  document.querySelectorAll('.views button').forEach(b => b.classList.toggle('on', b.dataset.view === m));
+  controls.enabled = m === 'macro'; wallsFull.visible = m === 'walk'; wallsStub.visible = m !== 'walk';
+  $('hint').textContent = m === 'macro' ? 'Arrastra para rotar · rueda para zoom · clic en un rack para ver su detalle' : '';
+  resize();
+}
+document.querySelectorAll('.views button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.view === 'prov'){ setMode('macro'); focusTo = new THREE.Vector3((PX0 + PX1) / 2, 0, 0); ortho.zoom = Math.min(1.3, 46 / (PZ * 2 + 8)); ortho.updateProjectionMatrix(); document.querySelectorAll('.views button').forEach(x => x.classList.toggle('on', x === b)); return; }
+  if (b.dataset.view === 'macro'){ focusTo = new THREE.Vector3(0, 0, 0); ortho.zoom = 1; ortho.updateProjectionMatrix(); }
+  setMode(b.dataset.view); }));
+function resize(){
+  const w = stage.clientWidth, h = stage.clientHeight, a = w / h;
+  const v = a < 1 ? 43 / a * .72 : (w < 1200 ? 32 : 29);
+  ortho.left = -v * a; ortho.right = v * a; ortho.top = v; ortho.bottom = -v;
+  if (w > 820) ortho.setViewOffset(w, h, 170, 0, w, h); else ortho.setViewOffset(w, h, 0, 0, w, h);
+  ortho.updateProjectionMatrix();
+  persp.aspect = a; persp.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+}
+new ResizeObserver(resize).observe(stage);
+const activeCam = () => mode === 'walk' ? persp : ortho;
+
+// colisiones: muros y racks
+function blocked(x, z){
+  const r = .35;
+  const dentro = x > XMIN + r && x < XMAX - r && z > ZMIN + r && z < ZMAX - r;
+  const puerta = Math.abs(z) < 2.6 && x >= XMAX - r - .01 && x <= XMAX + T + r + .01;        // portón del muelle
+  const patio = x > XMAX + T + r && x < PX1 - r && Math.abs(z) < PZ - r;                   // patio + zona de proveedores
+  if (!dentro && !puerta && !patio) return true;
+  if (patio && x > PX0 - r && x < PX0 + r && Math.abs(z) > 3) return true;                  // cerca de proveedores (entrada en el centro)
+  for (const b of bays) if (bayVisible(b) && Math.abs(x - b.x) < BW/2 + r && Math.abs(z - b.z) < BD/2 + r) return true;
+  for (const h of houses) if (Math.abs(x - h.x) < (FW / 2 + .4) * h.s + r && Math.abs(z - h.z) < (FD / 2 + .3) * h.s + r) return true;
+  if (Math.abs(x - (XMAX + 6)) < 4.8 + r && Math.abs(z) < 1.25 + r) return true;            // camión
+  return false;
+}
+function tryMove(dx, dz){
+  if (!blocked(player.x + dx, player.z)) player.x += dx;
+  if (!blocked(player.x, player.z + dz)) player.z += dz;
+}
+function goToBay(b){
+  player.x = b.x; player.z = b.z + BD/2 + 2.75; player.yaw = 0; player.pitch = -.08;
+  if (mode !== 'walk') setMode('walk');
+}
+addEventListener('keydown', e => { if (mode === 'walk' && (e.key === 't' || e.key === 'T') && nearAgent && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)){ openChat(nearAgent); return; } });
+addEventListener('keydown', e => { if (mode !== 'walk' || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  const k = e.key.toLowerCase(); if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','shift','q','e'].includes(k)){ keys[k] = true; if (k.startsWith('arrow')) e.preventDefault(); } });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+document.querySelectorAll('.pad button').forEach(btn => {
+  const k = 'pad_' + btn.dataset.k;
+  const on = e => { e.preventDefault(); keys[k] = true; btn.classList.add('on'); }, off = () => { keys[k] = false; btn.classList.remove('on'); };
+  btn.addEventListener('pointerdown', on); btn.addEventListener('pointerup', off); btn.addEventListener('pointerleave', off); btn.addEventListener('pointercancel', off);
+});
+// mirar arrastrando + clic para seleccionar
+let drag = null;
+canvas.addEventListener('pointerdown', e => { drag = { x:e.clientX, y:e.clientY, sx:e.clientX, sy:e.clientY }; if (mode === 'walk') canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => {
+  if (!drag || mode !== 'walk') return;
+  player.yaw -= (e.clientX - drag.x) * .005; player.pitch = Math.max(-1.1, Math.min(.9, player.pitch - (e.clientY - drag.y) * .004));
+  drag.x = e.clientX; drag.y = e.clientY;
+});
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+canvas.addEventListener('pointerup', e => {
+  if (!drag) return; const moved = Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy); drag = null;
+  if (moved > 6) return;
+  const rc = canvas.getBoundingClientRect();
+  mouse.set((e.clientX - rc.left) / rc.width * 2 - 1, -(e.clientY - rc.top) / rc.height * 2 + 1);
+  ray.setFromCamera(mouse, activeCam());
+  const ah = ray.intersectObjects(agentHits, false)[0];
+  if (ah){ openChat(ah.object.userData.agent); return; }
+  const hh = ray.intersectObjects(houses.map(h => h.hit), false)[0];
+  if (hh){ abrirCruce(); return; }
+  const hit = ray.intersectObjects(hits, false)[0];
+  if (hit && hit.object.userData.bay.m) openDetail(hit.object.userData.bay);
+});
+
+// minimapa
+const mini = $('mini'), mg = mini.getContext('2d');
+const MX = x => (x - XMIN) / (XMAX - XMIN) * mini.width, MZ = z => (z - ZMIN) / (ZMAX - ZMIN) * mini.height;
+function drawMini(){
+  mg.fillStyle = '#f2f5fa'; mg.fillRect(0, 0, mini.width, mini.height);
+  mg.strokeStyle = '#1f5bff'; mg.lineWidth = 4; mg.strokeRect(2, 2, mini.width - 4, mini.height - 4);
+  const col = { crit:'#e5383b', low:'#e8a300', ok:'#14a06b', empty:'#c9d2e0' };
+  for (const b of bays){
+    if (!bayVisible(b)) continue;
+    mg.fillStyle = col[b.state] || col.empty;
+    mg.fillRect(MX(b.x - BW/2 + .1), MZ(b.z - BD/2), (BW - .2) / (XMAX - XMIN) * mini.width, BD / (ZMAX - ZMIN) * mini.height);
+  }
+  if (selected){ mg.strokeStyle = '#1f5bff'; mg.lineWidth = 3; mg.strokeRect(MX(selected.x - BW/2) - 2, MZ(selected.z - BD/2) - 2, BW / (XMAX - XMIN) * mini.width + 4, BD / (ZMAX - ZMIN) * mini.height + 4); }
+  mg.font = '700 15px Archivo, sans-serif'; mg.fillStyle = '#5d6b85'; mg.textAlign = 'right'; mg.textBaseline = 'middle';
+  for (let r = 0; r < (esSalas() ? ROWS : MAINROWS); r++) mg.fillText(LET[r], MX(XS) - 4, MZ(Z0 + r * PITCH));
+  mg.fillStyle = '#ff7a1a'; for (const n of npcs){ mg.beginPath(); mg.arc(MX(n.g.position.x), MZ(n.g.position.z), 5, 0, 7); mg.fill(); }   // operarios
+  const px = MX(player.x), pz = MZ(player.z), fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+  mg.fillStyle = 'rgba(31,91,255,.18)'; mg.beginPath(); mg.moveTo(px, pz);
+  mg.arc(px, pz, 46, Math.atan2(fz, fx) - .6, Math.atan2(fz, fx) + .6); mg.fill();
+  mg.fillStyle = '#0f1b33'; mg.beginPath(); mg.arc(px, pz, 7, 0, 7); mg.fill();
+}
+mini.addEventListener('click', e => {
+  const rc = mini.getBoundingClientRect();
+  const x = XMIN + (e.clientX - rc.left) / rc.width * (XMAX - XMIN), z = ZMIN + (e.clientY - rc.top) / rc.height * (ZMAX - ZMIN);
+  // al punto de pasillo más cercano
+  let best = null;
+  for (let r = 0; r < ROWS; r++){ const az = Z0 + r * PITCH + PITCH/2; const d = Math.abs(az - z); if (!best || d < best.d) best = { d, z:az }; }
+  const nx = Math.max(XMIN + .6, Math.min(XMAX - .6, x));
+  if (!blocked(nx, best.z)){ player.x = nx; player.z = best.z; }
+});
+
+/* ---------- bucle ---------- */
+const clock = new THREE.Clock(), tmp = new THREE.Vector3();
+let focusTo = null;
+function loop(){
+  const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
+  if (mode === 'walk'){
+    const run = keys.shift ? 2 : 1, sp = 3.2 * run * dt;
+    const fwd = (keys.w || keys.arrowup || keys.pad_f ? 1 : 0) - (keys.s || keys.arrowdown || keys.pad_b ? 1 : 0);
+    const str = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
+    const rot = (keys.arrowleft || keys.q || keys.pad_l ? 1 : 0) - (keys.arrowright || keys.e || keys.pad_r ? 1 : 0);
+    player.yaw += rot * 1.9 * dt;
+    const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+    if (fwd || str) tryMove((fx * fwd + -fz * str) * sp, (fz * fwd + fx * str) * sp);
+    persp.position.set(player.x, 1.65, player.z); persp.rotation.set(player.pitch, player.yaw, 0);
+    drawMini();
+  } else {
+    if (focusTo){ const d = focusTo.clone().sub(controls.target).multiplyScalar(Math.min(1, dt * 4)); controls.target.add(d); ortho.position.add(d); if (d.length() < .002) focusTo = null; }
+    controls.update();
+  }
+  // animación de cajas
+  let dirty = false;
+  for (let i = 0; i < cur.length; i++) if (cur[i] !== tgt[i]){
+    cur[i] = tgt[i] > cur[i] ? Math.min(tgt[i], cur[i] + dt * 2.5) : Math.max(tgt[i], cur[i] - dt * 2.5);
+    setBoxMatrix(i); dirty = true;
+  }
+  if (dirty) boxes.instanceMatrix.needsUpdate = true;
+  for (const L of LAYERS){ let d2 = false;
+    for (let i = 0; i < NI; i++) if (L.cur[i] !== L.tgt[i]){ L.cur[i] = L.tgt[i] > L.cur[i] ? Math.min(L.tgt[i], L.cur[i] + dt * 2.5) : Math.max(L.tgt[i], L.cur[i] - dt * 2.5); setLayerMatrix(L, i); d2 = true; }
+    if (d2){ L.mesh.instanceMatrix.needsUpdate = true; if (L.extra) L.extra.instanceMatrix.needsUpdate = true; } }
+  stepFork(dt); stepNPCs(dt, t); stepSmoke(dt);
+  // pulsos de alerta
+  const k = (Math.sin(t * 5) + 1) / 2, k2 = (Math.sin(t * 2.5) + 1) / 2;
+  matCrit.opacity = .35 + .55 * k; matLow.opacity = .35 + .35 * k2;
+  matHalo.opacity = .35 * (1 - k) + .05; for (const b of bays) if (b.beacon.visible) b.beacon.children[1].scale.setScalar(1 + k * .9);
+  if (selected){ selRing.visible = true; selRing.position.set(selected.x, .035, selected.z); selRing.material.opacity = .5 + .4 * k2; } else selRing.visible = false;
+
+  const cam = activeCam();
+  renderer.render(scene, cam);
+  // etiquetas
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  // racks que un operario o agente está revisando (o ya está llegando a revisar)
+  const enRevision = new Set(npcs.filter(n => n.bay && (n.state === 'check' || (n.state === 'walk' && Math.hypot(n.g.position.x - n.bay.x, n.g.position.z - n.bay.z) < 4))).map(n => n.bay));
+  for (const b of bays){
+    if (!b.tag) continue;
+    let show = !!b.m;
+    const rev = show && enRevision.has(b);
+    if (show){
+      if (mode === 'walk'){ const d = Math.hypot(b.x - player.x, b.z - player.z); show = d < 11 || b === selected; }
+      else show = showAll || (showCrit && b.state === 'crit') || (showLow && b.state === 'low') || b === selected || rev;
+    }
+    b.tag.classList.toggle('rev', rev);
+    if (show){ tmp.copy(mode === 'walk' ? b.anchorWalk : b.anchor).project(cam); show = tmp.z < 1 && tmp.z > -1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1; }
+    b.tag.hidden = !show;
+    if (show){ b.tag.style.transform = `translate(${(tmp.x + 1) / 2 * w}px, ${(-tmp.y + 1) / 2 * h}px) translate(-50%, -100%)`; b.tag.style.zIndex = String(1000 - Math.round(tmp.z * 500)); }
+  }
+  updateAgentsUI(cam, w, h);
+  for (const hs of houses){
+    let sh = mode === 'walk' ? Math.hypot(hs.x - player.x, hs.z - player.z) < 35 : true;                  // una sola etiqueta grande
+    if (sh){ tmp.set(hs.x, (FH + 1.4) * hs.s, hs.z).project(cam); sh = tmp.z < 1 && tmp.z > -1 && Math.abs(tmp.x) < 1.05 && Math.abs(tmp.y) < 1.05; }
+    hs.tag.hidden = !sh; if (sh) hs.tag.style.transform = `translate(${(tmp.x + 1) / 2 * w}px, ${(-tmp.y + 1) / 2 * h}px) translate(-50%, -100%)`; }
+  for (const f of floaters){ tmp.copy(f.b.anchor).project(cam); f.d.style.transform = `translate(${(tmp.x + 1) / 2 * w}px, ${(-tmp.y + 1) / 2 * h}px) translate(-50%, -100%)`; }
+  requestAnimationFrame(loop);
+}
+
+/* =====================================================================
+   DATOS
+   ===================================================================== */
+let BODEGAS = CONFIG.bodegasDefault.slice(), current = BODEGAS[0];
+const prods = new Map();           // id → { m, hist:[] }
+const movHist = [];                // todos los movimientos (con id y bodega)
+let firstLoad = true, sheetHasMovs = false, demoUser = '';
+let selected = null;
+
+function applyData(d){
+  if (d.bodegas && d.bodegas.length){ BODEGAS = []; d.bodegas.concat(CONFIG.bodegasDefault).forEach(b => { if (!BODEGAS.some(x => claveBodega(x) === claveBodega(b))) BODEGAS.push(b); }); }   // 4 bodegas, sin repetir variantes del nombre
+  if (!BODEGAS.includes(current)) current = BODEGAS.find(b => claveBodega(b) === claveBodega(current)) || BODEGAS[0];
+  if (d.bitacora) BITACORA = d.bitacora;
+  if (d.calidad) CALIDAD = d.calidad;
+  if (d.solicitudes) SOLICITUDES = d.solicitudes;
+  if ('solError' in d) SOL_ERR = d.solError || '';
+  if (d.entradas) ENTRADAS = d.entradas;
+  if (d.produccion) PROD = Object.assign({ pedidos:[], req:[], bomMalos:[] }, d.produccion);
+  if (d.entradasCols) ENT_COLS = d.entradasCols;
+  if (d.proveedores) PROVEEDORES = d.proveedores;
+  if (!houses.length) buildHouses();
+  try { nombrarAgentes(); } catch (e) {}
+  if (!BODEGAS.includes(current)) current = BODEGAS[0];
+  const deltas = [];
+  for (const raw of d.materiales){
+    const m = toMaterial(raw); if (!m.bodega) m.bodega = BODEGAS[0];
+    { const igual = BODEGAS.find(b => claveBodega(b) === claveBodega(m.bodega)); if (igual) m.bodega = igual; }
+    if (!BODEGAS.includes(m.bodega)) BODEGAS.push(m.bodega);
+    const p = prods.get(m.id);
+    if (!p){ prods.set(m.id, { m, hist:[{ t:Date.now(), v:m.stock }] }); continue; }
+    const delta = m.stock - p.m.stock; p.m = m;
+    if (Math.abs(delta) > 1e-9){ p.hist.push({ t:Date.now(), v:m.stock }); if (p.hist.length > 60) p.hist.shift(); if (!firstLoad) deltas.push([m, delta]); }
+  }
+  if (d.movimientos && d.movimientos.length){
+    sheetHasMovs = true; movHist.length = 0;
+    d.movimientos.map(toMov).forEach(mv => {
+      const p = prods.get(mv.material) || [...prods.values()].find(q => q.m.nombre === mv.material);
+      const neg = /sal|cons|desp|out/i.test(mv.tipo) || mv.cantidad < 0;
+      movHist.unshift({ tipo: neg ? 'out' : 'in', id: p ? p.m.id : mv.material, nombre: p ? p.m.nombre : mv.material, bodega: p ? p.m.bodega : '',
+        cantidad: Math.abs(mv.cantidad), unidad: p ? p.m.unidad : '', hora: mv.fecha ? new Date(mv.fecha) : null, usuario: mv.usuario, doc: mv.doc, fresh: !firstLoad && false });
+    });
+  }
+  if (sheetHasMovs){
+    const nuevos = movHist.filter(e => !movVistos.has(claveMov(e)));
+    nuevos.forEach(e => movVistos.add(claveMov(e)));
+    if (movBase) revisarEntradas(nuevos); movBase = true;
+  }
+  for (const [m, delta] of deltas){
+    if (!sheetHasMovs && delta > 0 && !firstLoad) setTimeout(() => revisarEntradas([movHist[0]]), 0);
+    if (!sheetHasMovs) pushMov({ tipo: delta < 0 ? 'out' : 'in', id:m.id, nombre:m.nombre, bodega:m.bodega, cantidad:Math.abs(delta), unidad:m.unidad, hora:new Date() });
+    else if (movHist[0]) movHist[0].fresh = true;
+  }
+  const pend = new Map(deltas.filter(([m]) => m.bodega === current).map(([m, d]) => [m.id, d]));
+  assignBays(firstLoad, pend);
+  for (const b of bays) if (b.m && pend.has(b.m.id) && !b._busy){ const d = pend.get(b.m.id); b._busy = true;
+    queueTrip(b, d, () => { b._busy = false; setBayTarget(b, false); updateBayVisual(b); floatDelta(b, d); renderTabs(); renderPanels(); }); }
+  firstLoad = false;
+  renderTabs(); renderPanels(); refreshAgentBadges(); updateHouses();
+}
+function pushMov(e){ if (!e.usuario && demoUser) e.usuario = demoUser; e.fresh = true; movHist.unshift(e); if (movHist.length > 2000) movHist.length = 2000; }
+
+// coloca los productos de la bodega actual en sus racks (Zona) y los demás en racks libres
+function assignBays(instant, pend){
+  aplicarPasilloK();
+  const list = [...prods.values()].map(p => p.m).filter(m => m.bodega === current);
+  const prevIds = bays.map(b => b.m && b.m.id);
+  bays.forEach(b => b.m = null);
+  const rest = [];
+  for (const m of list){ const b = bayByCode[m.zona]; if (b && bayVisible(b) && !b.m) b.m = m; else rest.push(m); }
+  for (const m of rest){ const b = bays.find(x => bayVisible(x) && !x.m); if (!b) break; b.m = m; m.autoZona = true; }
+  bays.forEach((b, i) => {
+    if (!instant && pend && b.m && pend.has(b.m.id) && prevIds[i] === b.m.id) return;   // lo actualiza el montacargas al llegar
+    if (b._busy && !instant) return;
+    setBayTarget(b, instant || prevIds[i] !== (b.m && b.m.id)); updateBayVisual(b); });
+  if (selected && (!selected.m)) closeDetail();
+}
+
+function bodegasVisibles(){ return BODEGAS; }                          // se muestran todas las bodegas, con o sin productos
+function renderTabs(){
+  const tabs = $('tabs'), vis = bodegasVisibles();
+  if ([...tabs.children].map(b => b.dataset.b).join('|') !== vis.join('|')){
+    tabs.innerHTML = '';
+    vis.forEach(n => { const b = document.createElement('button'); b.setAttribute('role','tab'); b.dataset.b = n;
+      b.innerHTML = `<span></span><span class="bd zero">0</span>`; b.firstChild.textContent = n;
+      b.addEventListener('click', () => { if (current === n) return; current = n; nombrarAgentes(); closeDetail(); resetFork(); closeChat(); resetNPCs(); bays.forEach(x => x._busy = false); assignBays(true); renderTabs(); renderPanels(); });
+      tabs.appendChild(b); });
+  }
+  [...tabs.children].forEach(b => {
+    const n = b.dataset.b, al = [...prods.values()].filter(p => p.m.bodega === n && status(p.m) !== 'ok').length;
+    b.classList.toggle('on', n === current); b.setAttribute('aria-selected', n === current);
+    const bd = b.querySelector('.bd'); bd.textContent = al; bd.className = 'bd' + (al ? '' : ' zero');
+  });
+}
+function renderPanels(){
+  const act = bays.filter(b => b.m), q = norm($('q').value || '');
+  const crit = act.filter(b => status(b.m) === 'crit'), low = act.filter(b => status(b.m) === 'low');
+  $('kMat').innerHTML = act.length + '<span> / ' + bays.filter(bayVisible).length + '</span>';
+  $('kAl').textContent = crit.length + low.length;
+  $('kAlD').textContent = crit.length ? crit.length + (crit.length === 1 ? ' crítica' : ' críticas') : '';
+  $('kOcc').textContent = act.length ? Math.round(act.reduce((a, b) => a + Math.min(1, b.m.stock / b.m.max), 0) / act.length * 100) + '%' : '—';
+  const myMovs = movHist.filter(e => e.bodega === current);
+  $('kMov').textContent = myMovs.length;
+  const al = [...crit, ...low];
+  $('alCount').textContent = al.length; $('alCount').className = 'count' + (al.length ? '' : ' zero');
+  $('alList').innerHTML = al.length ? '' : '<div class="empty">Sin alertas en ' + esc(current) + '.</div>';
+  al.slice(0, 40).forEach(b => {
+    const st = status(b.m), el = document.createElement('button'); el.className = 'al ' + st;
+    el.innerHTML = '<span class="ic">!</span><span><div class="t"></div><div class="s"></div></span>';
+    el.querySelector('.t').textContent = (st === 'crit' ? 'Crítico: ' : 'Bajo: ') + b.m.nombre;
+    const pq = pedido(b.m), cb = cobertura(b.m);
+    el.querySelector('.s').textContent = `${fmt(b.m.stock)} / mín ${fmt(b.m.min)} ${b.m.unidad} · ${b.code}` + (cb !== null ? ` · ${aprox(b.m)}${fmtDias(cb)}` : '') + (pq ? ` · pedir ${fmt(pq)}` : '');
+    el.onclick = () => openDetail(b); $('alList').appendChild(el);
+  });
+  const inv = $('invList'); inv.innerHTML = '';
+  const shown = act.filter(b => !q || norm(b.m.nombre).includes(q) || norm(b.code).includes(q))
+    .sort((a, b) => a.m.stock / a.m.max - b.m.stock / b.m.max);
+  if (!shown.length) inv.innerHTML = '<div class="empty" style="padding:6px">' + (act.length ? 'Sin resultados.' : 'Esta bodega no tiene productos todavía.') + '</div>';
+  shown.forEach(b => {
+    const el = document.createElement('button'); el.className = 'item ' + status(b.m);
+    el.innerHTML = '<span class="n"><small></small><span></span></span><span class="v"></span><div class="bar"><span></span></div>';
+    el.querySelector('.n small').textContent = b.code; el.querySelector('.n span').textContent = b.m.nombre;
+    el.querySelector('.v').textContent = `${fmt(b.m.stock)} / ${fmt(b.m.max)} ${b.m.unidad}`;
+    el.querySelector('.bar>span').style.width = Math.min(100, b.m.stock / b.m.max * 100) + '%';
+    el.onclick = () => openDetail(b); inv.appendChild(el);
+  });
+  const tb = $('logBody'); tb.innerHTML = '';
+  if (!myMovs.length) tb.innerHTML = '<tr><td class="m" style="color:var(--muted)">Sin movimientos registrados en esta bodega.</td></tr>';
+  $('verMovs').textContent = 'Ver todos (' + myMovs.length + ')';
+  if (!$('movs').hidden) pintarMovs();
+  myMovs.slice(0, 5).forEach(e => {
+    const tr = document.createElement('tr'); if (e.fresh){ tr.className = 'new'; e.fresh = false; }
+    const h = e.hora && !isNaN(e.hora) ? e.hora.toLocaleString('es-CO', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
+    tr.innerHTML = `<td class="h"></td><td><span class="chip ${e.tipo}">${e.tipo === 'out' ? 'Salida' : 'Entrada'}</span></td><td class="m"></td><td class="q"></td>`;
+    tr.querySelector('.h').textContent = h; tr.querySelector('.m').textContent = e.nombre + (e.usuario ? ' · ' + e.usuario : '');
+    tr.querySelector('.q').textContent = (e.tipo === 'out' ? '−' : '+') + fmt(e.cantidad) + ' ' + e.unidad;
+    tb.appendChild(tr);
+  });
+  if (selected) renderDetail();
+}
+$('q').addEventListener('input', renderPanels);
+
+/* ---------- detalle ---------- */
+function openDetail(b){
+  if (selected && selected.tag) selected.tag.classList.remove('sel');
+  selected = b; if (b.tag) b.tag.classList.add('sel');
+  $('detail').hidden = false; renderDetail();
+  if (mode === 'macro') focusTo = new THREE.Vector3(b.x, 0, b.z);
+}
+function closeDetail(){ if (selected && selected.tag) selected.tag.classList.remove('sel'); selected = null; $('detail').hidden = true; }
+$('dClose').addEventListener('click', e => { e.stopPropagation(); closeDetail(); });
+$('dGo').addEventListener('click', () => { if (selected) goToBay(selected); });
+addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+function renderDetail(){
+  const b = selected, m = b.m; if (!m) return closeDetail();
+  const s = status(m), pct = Math.min(100, m.stock / m.max * 100), p = prods.get(m.id);
+  $('dCode').textContent = `${current} · Rack ${b.code}${m.autoZona ? ' (asignado)' : ''} · ${m.id}`;
+  $('dName').textContent = m.nombre;
+  $('dPill').className = 'pill ' + s; $('dPill').textContent = s === 'crit' ? 'Crítico · en o bajo el mínimo' : s === 'low' ? 'Bajo · cerca del mínimo' : 'Stock normal';
+  $('dStock').textContent = fmt(m.stock); $('dUnit').textContent = m.unidad + ' en stock';
+  $('dGauge').className = 'gauge ' + s; $('dFill').style.width = pct + '%';
+  const minP = Math.min(100, m.min / m.max * 100);
+  $('dMin').style.left = minP + '%'; $('dMinL').style.left = minP + '%'; $('dMinL').textContent = 'mín ' + fmt(m.min);
+  $('dMaxL').style.left = '100%'; $('dMaxL').textContent = 'máx ' + fmt(m.max);
+  const mine = movHist.filter(e => e.id === m.id);
+  const outs = mine.filter(e => e.tipo === 'out').reduce((a, e) => a + e.cantidad, 0), ins = mine.filter(e => e.tipo === 'in').reduce((a, e) => a + e.cantidad, 0);
+  const o = lowerKeys(m.raw || {}), costo = num(pick(o, ['costo','precio','preciounitario','preciounitariocompra','valorunitario']));
+  const kv = [['Ocupación', Math.round(m.stock / m.max * 100) + '%'], ['Posiciones', boxesFor(m) + ' / ' + CAP],
+    ['Para llenar', fmt(Math.max(0, m.max - m.stock)) + ' ' + m.unidad],
+    m.stock >= m.min ? ['Sobre el mínimo', fmt(m.stock - m.min) + ' ' + m.unidad] : ['Falta para el mínimo', fmt(m.min - m.stock) + ' ' + m.unidad],
+    ['Salidas', fmt(outs) + ' ' + m.unidad], ['Entradas', fmt(ins) + ' ' + m.unidad]];
+  if (costo) kv.push(['Valor en stock', '$' + Math.round(costo * m.stock).toLocaleString('es-CO')]);
+  const cb = cobertura(m), pq = pedido(m);
+  kv.push(['Consumo diario', m.consumo > 0 ? fmt(m.consumo) + ' ' + m.unidad + (m.fuente ? ' (' + FUENTE[m.fuente] + ')' : '') : 'Sin salidas recientes']);
+  kv.push(['Cobertura (hasta 0)', aprox(m) + fmtDias(cb)]);
+  // fechas: cuándo llega al mínimo, cuándo pedir (mínimo − días de entrega) y cuándo llega a 0
+  const fecha = d => new Date(Date.now() + d * 864e5).toLocaleDateString('es-CO', { day:'numeric', month:'short', year:'numeric' });
+  const dMin = m.consumo > 0 ? (m.stock - m.min) / m.consumo : null;
+  kv.push(['Llega al mínimo', m.stock <= m.min ? 'Ya está en el mínimo' : dMin === null ? '—' : aprox(m) + fecha(dMin) + ' (' + fmtDias(dMin).toLowerCase() + ')']);
+  const dPed = dMin === null ? null : dMin - (m.lead || 0);
+  kv.push(['Pedir a más tardar', m.stock <= m.min ? 'Hoy' : dPed === null ? '—' : dPed <= 0 ? 'Hoy (ya es tarde)' : aprox(m) + fecha(dPed)]);
+  kv.push(['Se agota (stock 0)', cb === null ? '—' : aprox(m) + fecha(cb)]);
+  kv.push(['Pedido sugerido', pq ? fmt(pq) + ' ' + m.unidad : 'No requiere']);
+  if (m.lead) kv.push(['Entrega proveedor', m.lead + (m.lead === 1 ? ' día' : ' días')]);
+  const nt = $('dNote');
+  nt.textContent = m.fuente === 'estimado' ? `Consumo estimado manualmente en Config3D. Hay ${m.diasHist} días de historial y ${m.nSal} salidas; desde 14 días y 3 salidas se usará el consumo real.`
+    : m.fuente === 'preliminar' ? `Consumo preliminar: solo ${m.diasHist} días de historial y ${m.nSal} salidas. Escribe un ConsumoEstimado en Config3D para usarlo mientras se acumula historial.`
+    : m.fuente === 'real' && m.diasHist ? `Consumo real: promedio de ${m.nSal} salidas en los últimos ${Math.min(30, m.diasHist)} días.`
+    : !m.consumo ? 'Sin salidas registradas. Escribe un ConsumoEstimado en Config3D para calcular la cobertura.' : '';
+  nt.hidden = !nt.textContent;
+  const od = $('dOrder');
+  if (pq){ od.hidden = false; od.className = 'order ' + s;
+    od.innerHTML = `<b>Pide ${esc(fmt(pq))} ${esc(m.unidad)}</b><span>${m.max > m.min ? 'Para volver al máximo (' + esc(fmt(m.max)) + ')' : 'Para llegar a 2 × mínimo (' + esc(fmt(objetivo(m))) + '), porque el StockMax no es mayor que el mínimo'}` + (m.lead && m.consumo ? ` más ${esc(fmt(m.consumo * m.lead))} que se consumen en ${m.lead} días de entrega` : '') + `.</span>`
+      + (cb !== null && m.lead && cb < m.lead ? `<span class="warn">Se agota en ${esc(fmtDias(cb).toLowerCase())}, antes de que llegue el pedido (${m.lead} días).</span>` : ''); }
+  else od.hidden = true;
+  $('dKv').innerHTML = kv.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
+  const n = boxesFor(m); let html = '';
+  for (let l = LEVELS - 1; l >= 0; l--){ html += `<div class="lv"><b>Nivel ${l + 1}</b>`; for (let k = 0; k < SC * SR; k++) html += `<i class="${l * SC * SR + k < n ? 'f' : ''}"></i>`; html += '</div>'; }
+  $('dSlots').innerHTML = html;
+  const h = p && p.hist.length > 1 ? p.hist : [{ v:m.stock }, { v:m.stock }];
+  const X = i => i / (h.length - 1) * 300, Y = v => 60 - Math.max(0, Math.min(1, v / m.max)) * 54;
+  const line = h.map((q, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(q.v).toFixed(1)).join(' ');
+  const col = s === 'crit' ? '#e5383b' : s === 'low' ? '#e8a300' : '#14a06b';
+  $('dSpark').innerHTML = `<line x1="0" x2="300" y1="${Y(m.min)}" y2="${Y(m.min)}" stroke="#5d6b85" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/><path d="${line} L300 62 L0 62 Z" fill="${col}" fill-opacity=".14"/><path d="${line}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/><circle cx="${X(h.length - 1) - 3}" cy="${Y(h[h.length - 1].v)}" r="3.5" fill="${col}"/>`;
+  $('dMovs').innerHTML = mine.length ? mine.slice(0, 8).map(e => {
+    const t = e.hora && !isNaN(e.hora) ? e.hora.toLocaleString('es-CO', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
+    return `<tr><td class="h">${esc(t)}</td><td><span class="chip ${e.tipo}">${e.tipo === 'out' ? 'Salida' : 'Entrada'}</span></td><td class="u">${esc(e.usuario || '')}</td><td class="q">${e.tipo === 'out' ? '−' : '+'}${esc(fmt(e.cantidad))} ${esc(e.unidad || m.unidad)}</td></tr>`;
+  }).join('') : '<tr><td class="h">Sin movimientos registrados.</td></tr>';
+  const extra = Object.entries(m.raw || {}).filter(([k, v]) => !KNOWN.has(norm(k)) && v !== '' && v != null);
+  $('dExtraH').hidden = !extra.length;
+  $('dExtra').innerHTML = extra.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
+}
+
+/* ---------- fuentes de datos ---------- */
+function setLive(mode, text){ const l = $('live'); l.className = 'live' + (mode === 'demo' ? ' demo' : mode === 'err' ? ' err' : ''); l.textContent = text; }
+function stamp(){ $('sync').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CO'); }
+function pollAppsScript(){
+  google.script.run
+    .withSuccessHandler(json => { applyData(typeof json === 'string' ? JSON.parse(json) : json); setLive('live', 'En vivo'); stamp(); setTimeout(pollAppsScript, CONFIG.pollMs); })
+    .withFailureHandler(err => { setLive('err', 'Sin conexión'); console.error(err); setTimeout(pollAppsScript, CONFIG.pollMs * 2); })
+    .getData();
+}
+// DEMO: productos parecidos a los de PEIM repartidos en las 3 bodegas
+const DEMO_SRC = {
+  Salas: 'Thiner superfino|Botella;Varsol|Botella;Pata madera L#6|Unidad;Pata plastica|Unidad;Pata cuadrada|Unidad;Brazo tubo|Juego de pares;Brioni|Unidad;Herraje C14|Juego de pares;Balancines|Juego de pares;Pata madera L#10|Unidad;Pata conica|Unidad;Pegante|Galon;Vinipel|Rollo;Boton diamante|Unidad;Colbon|Litros;Pata puff|Unidad;Siliconado|Bulto;Herraje C15|Juego de pares;Soporte L|Unidad;Cincha|Rollo;Quita manchas|Botella;Grillos|Unidad;Hilo salas|Unidad;Hilasa|Unidad;Hilo bordadora|Unidad;Herraje click|Juego de pares;Platinas|Unidad;Herraje anclaje|Cajas;Grapas 2 in|Caja;Grapa 80/10|Caja;Tornillo 3/4|Unidad;Tornillos 1|Unidad;Tornillos 1 1/2|Unidad;Tornillos 2|Unidad;Tornillos 2 1/2|Unidad;Tornillos 3 pulgadas|Unidad;Guata|Rollo;Tela chenille|Rollo;Cuerina negra|Rollo;Cuerina café|Rollo;Lino gris|Rollo;Espuma D-23 lámina|Unidad',
+  Colchonera: 'Resorte bonnell|Unidad;Resorte pocket|Unidad;Tela jacquard colchón|Rollo;Tela no tejida|Rollo;Ribete|Rollo;Hilo colchonera YARD 3000|Unidad;Hilo colchonera YARD 1000|Unidad;Grapa colchonera|Cajas;Guata 200 g|Rollo;Espuma laminada 2 cm|Unidad;Espuma laminada 4 cm|Unidad;Manijas|Unidad;Cremallera colchón|Rollo;Etiquetas|Unidad;Plástico empaque|Rollo;Cinta de cierre|Rollo;Fieltro|Rollo;Marco perimetral|Unidad;Pegante colchón|Galon;Esquineros cartón|Unidad;Tela antideslizante|Rollo;Hilo acolchar|Unidad;Botones colchón|Unidad;Algodón|Bulto',
+  'Basecamas y cabeceros': 'Basecama sencilla 100x190|Unidad;Basecama semidoble 120x190|Unidad;Basecama doble 140x190|Unidad;Basecama queen 160x190|Unidad;Basecama king 200x200|Unidad;Basecama sencilla 100x190 tapizada|Unidad;Cabecero capitoneado doble|Unidad;Cabecero capitoneado queen|Unidad;Cabecero liso sencillo|Unidad;Cabecero tapizado king|Unidad;Cabecero capitoneado semidoble|Unidad;Listón pino 2x4|Unidad;Triplex 9 mm|Lámina;Tablilla pino|Unidad;Patas basecama|Juego de pares;Grapa 80/10|Caja;Tela lona negra|Rollo;Espuma cabecero 2 cm|Unidad;Botones capitoné|Unidad (bolsas de 100 und)',
+  Espumas: 'Poliol|Galon;TDI|Galon;Silicona espuma|Galon;Amina catalizadora|Litros;Estaño octoato|Litros;Cloruro de metileno|Galon;Pigmento azul|Litros;Pigmento blanco|Litros;Desmoldante|Galon;Bloque D-18|Unidad;Bloque D-23|Unidad;Bloque D-26|Unidad;Bloque D-30|Unidad;Espuma aglomerada|Unidad;Retal espuma|Bulto;Papel kraft molde|Rollo;Plástico bloque|Rollo;Agua tratada|Litros'
+};
+const DEMO = [];
+Object.entries(DEMO_SRC).forEach(([bod, list]) => list.split(';').forEach((s, i) => {
+  const [n, u] = s.split('|'), max = [10, 20, 40, 60, 100, 200, 500][(i * 7 + n.length) % 7];
+  const r = ((i * 37 + n.length * 13) % 100) / 100;
+  DEMO.push({ IDproducto: (bod[0] + String(1000 + i)), 'Nombre producto':n, Bodega:bod, Zona:'', 'Unidad producto':u,
+    ConsumoDiario: Math.round(max * (.01 + r * .05) * 10) / 10, DiasEntrega: [3, 5, 7, 10][i % 4],
+    ConsumoFuente: ['real', 'real', 'estimado', 'preliminar'][i % 4], DiasHistorial: [24, 30, 9, 6][i % 4], SalidasPeriodo: [8, 12, 2, 1][i % 4],
+    Stock: Math.round(max * (r < .1 ? .05 : r < .2 ? .18 : .3 + r * .65)), StockMin: Math.round(max * .15), StockMax: max,
+    Proveedor: ['FERREGARCIA','Daxy','Jose hoyos','Wilder','Induasis','Hilo'][i % 6] });
+}));
+const USERS = ['Administrador', 'Operativo 1', 'Operativo 2'];
+function demoTick(){
+  const row = DEMO[Math.floor(Math.random() * DEMO.length)];
+  if (row.Stock <= row.StockMin && Math.random() < .5) row.Stock = Math.round(row.StockMax * (.7 + Math.random() * .25));
+  else row.Stock = Math.max(0, row.Stock - Math.max(1, Math.round(row.StockMax * (.04 + Math.random() * .1))));
+  demoUser = USERS[Math.floor(Math.random() * USERS.length)];
+  applyData({ bodegas: CONFIG.bodegasDefault, materiales: DEMO.map(r => Object.assign({}, r)) }); stamp();
+  setTimeout(demoTick, 2200 + Math.random() * 1600);
+}
+
+// DEMO de producción: 4 productos terminados con su BOM y 7 pedidos
+function demoProduccion(){
+  const id = n => (DEMO.find(r => r['Nombre producto'] === n) || {}).IDproducto;
+  const BOM = {
+    'Sala en L 3 puestos': [['Pata madera L#6', 8], ['Tela chenille', 14], ['Espuma D-23 lámina', 5], ['Guata', 6], ['Grapa 80/10', .5], ['Pegante', .3]],
+    'Sofá 2 puestos': [['Pata conica', 4], ['Cuerina negra', 8], ['Espuma D-23 lámina', 3], ['Hilo salas', 1]],
+    'Colchón 140x190': [['Resorte pocket', 420], ['Tela jacquard colchón', 4.5], ['Espuma laminada 2 cm', 2], ['Ribete', 6], ['Manijas', 4]],
+    'Basecama doble 140x190': [['Listón pino 2x4', 6], ['Triplex 9 mm', 1], ['Tela lona negra', 3], ['Patas basecama', 1]]
+  };
+  const d = n => new Date(Date.now() + n * 864e5).toISOString();
+  const P = [['OP-1050', 'Muebles Rivera', 'Sala en L 3 puestos', 2, d(0)], ['OP-1051', 'Hogar Plus', 'Colchón 140x190', 6, d(0)], ['OP-1052', 'Hogar Plus', 'Sofá 2 puestos', 3, d(0)],
+             ['OP-1053', 'Distribuidora Andina', 'Basecama doble 140x190', 4, d(2)], ['OP-1054', 'Muebles Rivera', 'Sala en L 3 puestos', 5, d(3)], ['OP-1055', 'Cliente mostrador', 'Colchón 140x190', 2, d(5)],
+             ['OP-1056', 'Hogar Plus', 'Comedor 6 puestos', 1, d(6)]];
+  const pedidos = P.map(([pid, cli, pt, cant, ent]) => ({ id:pid, lote:'L261108-0800', cliente:cli, pt, cant, entrega:ent, estado:'Pendiente', descontado:'', obs:'',
+    bom: !!BOM[pt], lineas: (BOM[pt] || []).filter(([n]) => id(n)).map(([n, q]) => [id(n), Math.round(cant * q * 100) / 100]) }));
+  pedidos.filter(p => p.id === 'OP-1050' || p.id === 'OP-1052').forEach(p => p.estado = 'En producción');
+  const ag = {}; pedidos.filter(p => p.estado === 'En producción').forEach(p => p.lineas.forEach(([k, q]) => {
+    const r = DEMO.find(x => x.IDproducto === k); if (/Grapa|Pegante|Hilo/.test(r['Nombre producto'])) return;
+    ag[k] = ag[k] || { key:k, id:k, nombre:r['Nombre producto'], unidad:r['Unidad producto'], cant:0, stock:r.Stock, pedidos:[] }; ag[k].cant += q; if (ag[k].pedidos.indexOf(p.id) < 0) ag[k].pedidos.push(p.id); }));
+  const entrega = { lineas:Object.values(ag), pedidos:[{ fila:2, id:'OP-1050', pt:'Sala en L 3 puestos', cant:2 }, { fila:4, id:'OP-1052', pt:'Sofá 2 puestos', cant:3 }], reqs:[],
+    avisos:[], comprar:[], porEntrega:[{ nombre:'Grapa 80/10', unidad:'Caja', cant:1 }, { nombre:'Pegante', unidad:'Galon', cant:.6 }, { nombre:'Hilo salas', unidad:'Unidad', cant:3 }] };
+  const tela = DEMO.find(r => r['Nombre producto'] === 'Tela chenille');
+  return { activo:true, pedidos, entrega, bomPT:4, ptTotal:5, bomMalos:[], nBomMalos:0,
+    req: tela ? [{ pedido:'OP-1047', lote:'L261105-0900', id:tela.IDproducto, nombre:'Tela chenille', pendiente:9.5, unidad:'Rollo', proveedor:tela.Proveedor }] : [] };
+}
+setMode('macro'); requestAnimationFrame(loop);
+if (typeof google !== 'undefined' && google.script && google.script.run){ setLive('live', 'Conectando…'); pollAppsScript(); }
+else { setLive('demo', 'Demo · datos simulados'); const h7 = new Date(); h7.setHours(7, 2, 0, 0);
+  const demoSol = (() => { const L = [], hoyISO = new Date().toISOString(), ayer = new Date(Date.now() - 864e5).toISOString();
+    DEMO.filter((r, i) => r.Bodega === 'Salas' && r.Stock <= r.StockMin).slice(0, 3).forEach((r, i) => L.push({ id:'s' + i, producto:r.IDproducto, proveedor:r.Proveedor, cant: Math.round((r.StockMax - r.Stock) * (i === 0 ? .5 : 1.1)), unidad:r['Unidad producto'], fecha: hoyISO, area:'Producción salas', entregado:false }));
+    DEMO.filter(r => r.Stock > r.StockMin * 2).slice(0, 2).forEach((r, i) => L.push({ id:'x' + i, producto:r.IDproducto, proveedor:r.Proveedor, cant: 10, unidad:r['Unidad producto'], fecha: ayer, area:'Tapicería', entregado: i === 1 }));
+    return L; })();
+  applyData({ bodegas: CONFIG.bodegasDefault, materiales: DEMO.map(r => Object.assign({}, r)), calidad: { movVacios:1, sinBodega:2, sinProveedor:0 },
+    entradasCols: { documento:true, siigo:true },
+    entradas: DEMO.slice(0, 16).map((r, i) => ({ id: 'mv' + (100 + i), producto: r.IDproducto, fecha: new Date(Date.now() - (i + 1) * 1.7 * 864e5).toISOString(), cantidad: Math.round(r.StockMax * .3) || 1,
+      documento: i % 4 === 1 ? '' : 'FV-' + (2310 + i), siigo: i % 3 !== 0 })),
+    proveedores: ['FERREGARCIA','Daxy','Jose hoyos','Wilder','Induasis','Hilo'], solicitudes: demoSol, produccion: demoProduccion(),
+    bitacora: [{ Fecha: h7.toISOString(), Agente:'Carlos · Jefe de bodega', Evento:'Reporte diario enviado', Detalle:'tu correo · Inventario de hoy' }] }); stamp(); setTimeout(demoTick, 1500); }
+</script>
+
+</body>
+</html>
